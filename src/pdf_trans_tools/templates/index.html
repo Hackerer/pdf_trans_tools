@@ -533,16 +533,107 @@
             font-size: 14px;
             z-index: 1000;
             animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
         .toast.success {
-            background: #28a745;
+            background: linear-gradient(135deg, #28a745, #20c997);
         }
         .toast.error {
-            background: #dc3545;
+            background: linear-gradient(135deg, #dc3545, #c82333);
+        }
+        .toast.info {
+            background: linear-gradient(135deg, #667eea, #764ba2);
         }
         @keyframes slideIn {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
+        }
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 24px;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: var(--settings-bg);
+            border-radius: 12px;
+        }
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        .step.active {
+            color: var(--bg-gradient-start);
+            font-weight: 600;
+        }
+        .step.completed {
+            color: #28a745;
+        }
+        .step-number {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .step.active .step-number {
+            background: var(--bg-gradient-start);
+            color: white;
+        }
+        .step.completed .step-number {
+            background: #28a745;
+            color: white;
+        }
+        .step-arrow {
+            color: var(--text-muted);
+            font-size: 18px;
+        }
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .loading-overlay.show {
+            display: flex;
+        }
+        .loading-modal {
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            text-align: center;
+            max-width: 400px;
+        }
+        .loading-modal h3 {
+            margin: 16px 0 8px;
+            color: #333;
+        }
+        .loading-modal p {
+            color: #666;
+            font-size: 14px;
+        }
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
         }
     </style>
 </head>
@@ -551,12 +642,29 @@
         <div class="header">
             <h1>PDF翻译工具</h1>
             <div style="display: flex; align-items: center;">
-                <span class="version">v1.2.0</span>
+                <span class="version">v1.3.0</span>
                 <button class="theme-toggle" id="themeToggle" title="切换深色模式">🌙</button>
             </div>
         </div>
 
         <div class="content">
+            <div class="step-indicator" id="stepIndicator">
+                <div class="step active" id="step1">
+                    <div class="step-number">1</div>
+                    <span>上传文件</span>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step" id="step2">
+                    <div class="step-number">2</div>
+                    <span>选择语言</span>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step" id="step3">
+                    <div class="step-number">3</div>
+                    <span>翻译完成</span>
+                </div>
+            </div>
+
             <div class="upload-section">
                 <div class="upload-box" id="uploadBox">
                     <div class="upload-icon" id="uploadIcon">📄</div>
@@ -641,6 +749,14 @@
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
                     <div class="progress-text" id="progressText">0 / 0</div>
+                </div>
+            </div>
+
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="loading-modal">
+                    <div class="loading-spinner"></div>
+                    <h3 id="loadingTitle">正在处理...</h3>
+                    <p id="loadingText">请稍候</p>
                 </div>
             </div>
 
@@ -775,6 +891,30 @@
             }
         });
 
+        function updateStepIndicator(step) {
+            const step1 = document.getElementById('step1');
+            const step2 = document.getElementById('step2');
+            const step3 = document.getElementById('step3');
+
+            [step1, step2, step3].forEach(s => s.classList.remove('active', 'completed'));
+
+            if (step >= 1) step1.classList.add('completed');
+            if (step >= 2) step2.classList.add('active');
+            if (step >= 2) step1.classList.remove('active');
+            if (step >= 3) step3.classList.add('active');
+            if (step >= 3) step2.classList.remove('active');
+        }
+
+        function showLoadingOverlay(title, text) {
+            document.getElementById('loadingTitle').textContent = title;
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('loadingOverlay').classList.add('show');
+        }
+
+        function hideLoadingOverlay() {
+            document.getElementById('loadingOverlay').classList.remove('show');
+        }
+
         function handleFile(file) {
             currentFile = file;
 
@@ -799,6 +939,7 @@
             extractBtn.disabled = false;
             showStatus(`已选择文件: ${file.name} (${sizeText})`, 'info');
             originalText.textContent = '正在提取文本内容，请稍候...';
+            showLoadingOverlay('正在提取文本', `处理文件: ${file.name}`);
             loading.style.display = 'block';
 
             // Extract text preview
@@ -812,9 +953,11 @@
             .then(res => res.json())
             .then(data => {
                 loading.style.display = 'none';
+                hideLoadingOverlay();
                 if (data.success) {
                     originalText.textContent = data.text.substring(0, 2000) + (data.text.length > 2000 ? '\n...(内容已截断)' : '');
                     showStatus(`✓ 文本提取成功，共 ${data.page_count} 页，${data.text.length} 个字符`, 'success');
+                    updateStepIndicator(2);
 
                     // Update file info with page count
                     fileInfo.textContent = `${sizeText} · ${data.page_count} 页`;
@@ -825,12 +968,15 @@
                     fileInfo.className = 'file-info error';
                     uploadBox.classList.remove('has-file');
                     uploadIcon.textContent = '📄';
+                    updateStepIndicator(1);
                 }
             })
             .catch(err => {
                 loading.style.display = 'none';
+                hideLoadingOverlay();
                 originalText.textContent = '网络错误，请检查网络连接';
                 showStatus('✗ 网络错误: ' + err.message, 'error');
+                updateStepIndicator(1);
             });
         }
 
@@ -860,9 +1006,10 @@
         translateBtn.addEventListener('click', () => {
             if (!currentFile) return;
 
-            loading.style.display = 'block';
             const targetLang = document.getElementById('targetLang').options[document.getElementById('targetLang').selectedIndex].text;
+            showLoadingOverlay('正在翻译', `正在将文本翻译为${targetLang}，请稍候...`);
             showStatus(`正在翻译为${targetLang}，请稍候...`, 'info');
+            updateStepIndicator(2);
 
             const formData = new FormData();
             formData.append('file', currentFile);
@@ -877,10 +1024,12 @@
             .then(res => res.json())
             .then(data => {
                 loading.style.display = 'none';
+                hideLoadingOverlay();
 
                 if (data.success) {
                     currentOutputPath = data.output_filename;
                     translatedText.textContent = '✓ 翻译完成！文件已准备就绪。';
+                    updateStepIndicator(3);
 
                     const downloadLink = `/api/download/${encodeURIComponent(data.output_filename)}`;
                     statusBar.innerHTML = `✓ 翻译成功！<a href="${downloadLink}" class="download-link" style="background: #28a745; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; margin-left: 12px;">📥 下载翻译文件</a>`;
@@ -898,13 +1047,16 @@
                 } else {
                     translatedText.textContent = '✗ 翻译失败';
                     showStatus('✗ ' + getFriendlyError(data.error), 'error');
+                    updateStepIndicator(2);
                     showToast('翻译失败', 'error');
                 }
             })
             .catch(err => {
                 loading.style.display = 'none';
+                hideLoadingOverlay();
                 translatedText.textContent = '✗ 网络错误';
                 showStatus('✗ 网络错误: ' + err.message, 'error');
+                updateStepIndicator(2);
                 showToast('网络错误', 'error');
             });
         });
