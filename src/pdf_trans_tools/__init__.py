@@ -4,7 +4,7 @@ Main package entry point.
 Orchestrates PDF operations, translation, and validation.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 import logging
 import re
