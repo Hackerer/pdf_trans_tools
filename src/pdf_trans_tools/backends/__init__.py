@@ -105,23 +105,35 @@ class MyMemoryBackend(TranslationBackend):
         return " ".join(translated_parts)
 
     def _split_text(self, text: str, max_len: int = 450) -> list[str]:
-        """Split text into chunks that respect sentence boundaries."""
+        """Split text into chunks that respect sentence and paragraph boundaries."""
         if len(text) <= max_len:
             return [text]
 
-        # Split by sentence-ending punctuation
-        sentences = re.split(r'(?<=[.!?。！？])\s+', text)
+        # First try to split by paragraphs (double newline or double space)
+        paragraphs = re.split(r'\n\s*\n|\r\n\s*\r\n', text)
 
         chunks = []
         current_chunk = []
 
-        for sentence in sentences:
-            if sum(len(s) for s in current_chunk) + len(sentence) <= max_len:
-                current_chunk.append(sentence)
+        for paragraph in paragraphs:
+            # If single paragraph is too long, split by sentences
+            if len(paragraph) <= max_len:
+                if sum(len(s) for s in current_chunk) + len(paragraph) + 1 <= max_len:
+                    current_chunk.append(paragraph)
+                else:
+                    if current_chunk:
+                        chunks.append("\n".join(current_chunk))
+                    current_chunk = [paragraph]
             else:
-                if current_chunk:
-                    chunks.append(" ".join(current_chunk))
-                current_chunk = [sentence]
+                # Split long paragraph by sentences
+                sentences = re.split(r'(?<=[.!?。！？])\s+', paragraph)
+                for sentence in sentences:
+                    if sum(len(s) for s in current_chunk) + len(sentence) <= max_len:
+                        current_chunk.append(sentence)
+                    else:
+                        if current_chunk:
+                            chunks.append(" ".join(current_chunk))
+                        current_chunk = [sentence]
 
         if current_chunk:
             chunks.append(" ".join(current_chunk))
