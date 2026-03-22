@@ -2,7 +2,7 @@
 pdf_trans_tools - PDF Translation Tools
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 import logging
 import re
@@ -20,6 +20,7 @@ from pdf_trans_tools.exceptions import (
     InvalidLanguageError,
 )
 from pdf_trans_tools.backends import TranslationBackend, GoogleTranslateBackend, MockBackend, BackendManager
+from pdf_trans_tools.cache import TranslationCache, get_cache
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +51,12 @@ VALID_LANGUAGE_CODES = {
 class Translator:
     """Translate PDF documents between languages."""
 
-    def __init__(self, api_key: Optional[str] = None, target_lang: str = "en", backend: Optional[TranslationBackend] = None):
+    def __init__(self, api_key: Optional[str] = None, target_lang: str = "en", backend: Optional[TranslationBackend] = None, use_cache: bool = True):
         self.api_key = api_key
         self.target_lang = target_lang
         self._google_translate_url = "https://translation.googleapis.com/language/translate/v2"
+        self._use_cache = use_cache
+        self._cache = get_cache() if use_cache else None
 
         # Setup backend manager
         self._backend_manager = BackendManager()
@@ -77,10 +80,32 @@ class Translator:
             str: Translated text
         """
         lang = target_lang or self.target_lang
+
+        # Check cache first
+        if self._cache:
+            cached = self._cache.get(text, lang, source_lang)
+            if cached:
+                logger.debug(f"Cache hit for translation ({len(text)} chars)")
+                return cached
+
         backend = self._backend_manager.get("default") or self._backend_manager.get("google")
         if backend:
-            return backend.translate(text, lang, source_lang)
-        return self._mock_translate(text, lang)
+            result = backend.translate(text, lang, source_lang)
+        else:
+            result = self._mock_translate(text, lang)
+
+        # Store in cache
+        if self._cache and result:
+            self._cache.put(text, lang, result, source_lang)
+            logger.debug(f"Cached translation ({len(text)} chars)")
+
+        return result
+
+    def cache_stats(self) -> dict:
+        """Get cache statistics."""
+        if self._cache:
+            return self._cache.stats()
+        return {}
 
     def translate_pdf(self, input_path: str, output_path: str, target_lang: Optional[str] = None) -> bool:
         """

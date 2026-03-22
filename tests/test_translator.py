@@ -96,6 +96,6 @@ class TestTranslator:
         assert translator._google_translate_url == "https://translation.googleapis.com/language/translate/v2"
 
     def test_version_is_updated(self):
-        """Test version has been updated after multi-backend support."""
+        """Test version has been updated after caching."""
         from pdf_trans_tools import __version__
-        assert __version__ == "0.5.0"
+        assert __version__ == "0.6.0"
