@@ -1115,12 +1115,17 @@
             const formData = new FormData();
             formData.append('file', file);
 
+            console.log('Uploading file to extract:', file.name);
             fetch('/api/extract', {
                 method: 'POST',
                 body: formData
             })
-            .then(res => res.json())
+            .then(res => {
+                console.log('Extract response status:', res.status);
+                return res.json();
+            })
             .then(data => {
+                console.log('Extract response:', data);
                 hideLoadingOverlay();
                 if (data.success) {
                     originalText.textContent = data.text.substring(0, 2000) + (data.text.length > 2000 ? '\n...(内容已截断)' : '');
@@ -1140,8 +1145,9 @@
                 }
             })
             .catch(err => {
+                console.error('Extract error:', err);
                 hideLoadingOverlay();
-                originalText.textContent = '网络错误，请检查网络连接';
+                originalText.textContent = '网络错误，请检查网络连接或刷新页面重试';
                 showStatus('✗ 网络错误: ' + err.message, 'error');
                 updateStepIndicator(1);
             });
