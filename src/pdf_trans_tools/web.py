@@ -180,6 +180,25 @@ def download(filename):
     return send_file(safe_path, as_attachment=True)
 
 
+@app.route("/api/cache", methods=["GET", "DELETE"])
+def cache():
+    """Get or clear translation cache."""
+    if request.method == "DELETE":
+        cache = translator._cache
+        if cache:
+            cache.clear()
+        return jsonify({"success": True, "message": "Cache cleared"})
+
+    # GET - return cache stats
+    stats = translator.cache_stats()
+    return jsonify({
+        "hits": stats.get("hits", 0),
+        "misses": stats.get("misses", 0),
+        "size": stats.get("size", 0),
+        "hit_rate": f"{stats.get('hit_rate', 0) * 100:.1f}%"
+    })
+
+
 @app.route("/api/config", methods=["GET", "POST"])
 def config():
     """Get or set API configuration."""

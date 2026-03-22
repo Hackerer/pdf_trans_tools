@@ -875,15 +875,19 @@
 
             <div class="api-settings" id="apiSettings">
                 <div class="api-settings-header">
-                    <span class="api-settings-title">API配置</span>
-                    <span class="api-status disconnected" id="apiStatus">未配置</span>
+                    <span class="api-settings-title">翻译引擎</span>
+                    <span class="api-status connected" id="apiStatus">✓ MyMemory免费API</span>
                 </div>
                 <div class="api-input-group">
                     <input type="password" class="api-input" id="apiKeyInput" placeholder="输入Google Translate API Key (可选)">
-                    <button class="btn btn-secondary" id="saveApiKeyBtn" style="padding: 10px 16px;">保存</button>
+                    <button class="btn btn-secondary" id="saveApiKeyBtn" style="padding: 10px 16px;">使用Google</button>
                 </div>
                 <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
-                    使用API Key可以获得更准确的翻译质量。不填则使用模拟翻译。
+                    默认使用MyMemory免费翻译（无需API Key）。添加Google API Key可获得更高质量翻译。
+                </div>
+                <div class="cache-stats" id="cacheStats" style="margin-top: 12px; padding: 8px 12px; background: var(--settings-bg); border-radius: 6px; font-size: 12px; display: flex; justify-content: space-between;">
+                    <span>缓存命中率: <span id="cacheHitRate">0%</span></span>
+                    <button class="btn btn-secondary" id="clearCacheBtn" style="padding: 4px 8px; font-size: 11px;">清除缓存</button>
                 </div>
             </div>
 
@@ -1514,6 +1518,61 @@
 
             setTimeout(() => toast.remove(), 3000);
         }
+
+        // Update cache stats
+        function updateCacheStats() {
+            fetch('/api/cache')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('cacheHitRate').textContent = data.hit_rate;
+                });
+        }
+
+        // Clear cache button
+        document.getElementById('clearCacheBtn').addEventListener('click', () => {
+            fetch('/api/cache', { method: 'DELETE' })
+                .then(res => res.json())
+                .then(data => {
+                    showToast('缓存已清除', 'success');
+                    updateCacheStats();
+                });
+        });
+
+        // Initial cache stats update
+        updateCacheStats();
+        // Update cache stats every 10 seconds
+        setInterval(updateCacheStats, 10000);
+
+        // Update API status when saving
+        saveApiKeyBtn.addEventListener('click', () => {
+            const apiKey = apiKeyInput.value.trim();
+            const formData = new FormData();
+            formData.append('api_key', apiKey);
+
+            fetch('/api/config', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.has_api_key) {
+                        apiStatus.textContent = '✓ Google API已配置';
+                        apiStatus.className = 'api-status connected';
+                        showToast('Google API已启用', 'success');
+                    } else {
+                        apiStatus.textContent = '✓ MyMemory免费API';
+                        apiStatus.className = 'api-status connected';
+                        showToast('已切换到MyMemory免费翻译', 'success');
+                    }
+                    apiKeyInput.value = '';
+                    updateCacheStats();
+                }
+            })
+            .catch(() => {
+                showToast('保存失败', 'error');
+            });
+        });
 
         // Start batch processing when files are added
     </script>
