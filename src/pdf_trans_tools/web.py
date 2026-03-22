@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 from flask import Flask, render_template, request, jsonify, send_file
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
+app.config["SECRET_KEY"] = "pdf-trans-tools-secret-key-2024"
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB max upload
+app.config["DEBUG"] = False
 
 # Output directory for translated files
 OUTPUT_DIR = os.path.join(os.path.expanduser("~"), "pdf_trans_tools_output")
