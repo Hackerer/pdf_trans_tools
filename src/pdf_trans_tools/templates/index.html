@@ -742,25 +742,40 @@
             statusBar.textContent = `已选择: ${file.name}`;
             statusBar.className = 'status-bar';
             originalText.textContent = '正在提取文本...';
+            loading.style.display = 'block';
 
             // Extract text preview
             const formData = new FormData();
             formData.append('file', file);
 
+            console.log('Uploading file:', file.name, 'size:', file.size);
+
             fetch('/api/extract', {
                 method: 'POST',
                 body: formData
             })
-            .then(res => res.json())
+            .then(res => {
+                console.log('Response status:', res.status);
+                return res.json();
+            })
             .then(data => {
+                loading.style.display = 'none';
+                console.log('Extract response:', data);
                 if (data.success) {
                     originalText.textContent = data.text.substring(0, 2000) + (data.text.length > 2000 ? '\n...(截断)' : '');
+                    statusBar.textContent = `提取成功，共 ${data.page_count} 页`;
                 } else {
                     originalText.textContent = '提取失败: ' + data.error;
+                    statusBar.textContent = '提取失败: ' + data.error;
+                    statusBar.className = 'status-bar error';
                 }
             })
             .catch(err => {
+                loading.style.display = 'none';
+                console.error('Extract error:', err);
                 originalText.textContent = '错误: ' + err.message;
+                statusBar.textContent = '网络错误: ' + err.message;
+                statusBar.className = 'status-bar error';
             });
         }
 
