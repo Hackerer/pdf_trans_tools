@@ -84,7 +84,10 @@ def translate():
             }
         else:
             success = translator.translate_pdf(input_path, output_path, target_lang)
-            result = {"success": success, "output_filename": output_filename}
+            if not success:
+                result = {"success": False, "error": "PDF无内容或文本提取失败", "output_filename": output_filename}
+            else:
+                result = {"success": success, "output_filename": output_filename}
 
         # Cleanup input file
         os.unlink(input_path)
