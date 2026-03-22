@@ -2,7 +2,7 @@
 pdf_trans_tools - PDF Translation Tools
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 import re
 import time
