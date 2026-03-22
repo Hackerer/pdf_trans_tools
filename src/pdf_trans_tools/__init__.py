@@ -4,7 +4,7 @@ Main package entry point.
 Orchestrates PDF operations, translation, and validation.
 """
 
-__version__ = "0.9.0"
+__version__ = "1.0.0"
 
 import logging
 import re
@@ -27,6 +27,8 @@ from pdf_trans_tools.config import Config, load_config
 from pdf_trans_tools.validator import TranslationValidator, validate_translation, ValidationResult
 from pdf_trans_tools.pdf_reader import PdfReaderHelper
 from pdf_trans_tools.pdf_writer import PdfWriterHelper
+from pdf_trans_tools.batch import BatchProcessor, BatchResult
+from pdf_trans_tools.retry import with_retry, RetryExhaustedError, RetryStats, get_retry_stats
 
 logger = logging.getLogger(__name__)
 
