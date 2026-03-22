@@ -2,7 +2,7 @@
 pdf_trans_tools - PDF Translation Tools
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 import logging
 import re
@@ -19,6 +19,7 @@ from pdf_trans_tools.exceptions import (
     TranslationRateLimitError,
     InvalidLanguageError,
 )
+from pdf_trans_tools.backends import TranslationBackend, GoogleTranslateBackend, MockBackend, BackendManager
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +50,37 @@ VALID_LANGUAGE_CODES = {
 class Translator:
     """Translate PDF documents between languages."""
 
-    def __init__(self, api_key: Optional[str] = None, target_lang: str = "en"):
+    def __init__(self, api_key: Optional[str] = None, target_lang: str = "en", backend: Optional[TranslationBackend] = None):
         self.api_key = api_key
         self.target_lang = target_lang
         self._google_translate_url = "https://translation.googleapis.com/language/translate/v2"
+
+        # Setup backend manager
+        self._backend_manager = BackendManager()
+        if backend:
+            self._backend_manager.register("default", backend)
+        elif api_key:
+            self._backend_manager.register("google", GoogleTranslateBackend(api_key))
+        else:
+            self._backend_manager.register("mock", MockBackend())
+
+    def translate(self, text: str, target_lang: str = None, source_lang: str = "") -> str:
+        """
+        Translate text using the registered backend.
+
+        Args:
+            text: Text to translate
+            target_lang: Target language code
+            source_lang: Source language code (auto-detect if empty)
+
+        Returns:
+            str: Translated text
+        """
+        lang = target_lang or self.target_lang
+        backend = self._backend_manager.get("default") or self._backend_manager.get("google")
+        if backend:
+            return backend.translate(text, lang, source_lang)
+        return self._mock_translate(text, lang)
 
     def translate_pdf(self, input_path: str, output_path: str, target_lang: Optional[str] = None) -> bool:
         """
