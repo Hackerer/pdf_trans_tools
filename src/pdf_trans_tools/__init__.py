@@ -2,7 +2,7 @@
 pdf_trans_tools - PDF Translation Tools
 """
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 import logging
 import re
@@ -21,6 +21,7 @@ from pdf_trans_tools.exceptions import (
 )
 from pdf_trans_tools.backends import TranslationBackend, GoogleTranslateBackend, MockBackend, BackendManager
 from pdf_trans_tools.cache import TranslationCache, get_cache
+from pdf_trans_tools.config import Config, load_config
 
 logger = logging.getLogger(__name__)
 
