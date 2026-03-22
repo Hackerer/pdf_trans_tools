@@ -7,8 +7,11 @@ import tempfile
 import logging
 from pathlib import Path
 
-# 配置日志
-logging.basicConfig(level=logging.DEBUG)
+# Configure logging - reduce verbosity in production
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 from flask import Flask, render_template, request, jsonify, send_file
@@ -24,7 +27,6 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
 logger.info(f"Template folder: {app.template_folder}")
-logger.info(f"Static folder: {app.static_folder}")
 
 # Import translator components
 from pdf_trans_tools import Translator
