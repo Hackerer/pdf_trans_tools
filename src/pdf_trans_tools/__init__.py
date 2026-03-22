@@ -1,8 +1,10 @@
 """
 pdf_trans_tools - PDF Translation Tools
+Main package entry point.
+Orchestrates PDF operations, translation, and validation.
 """
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 import logging
 import re
@@ -23,6 +25,8 @@ from pdf_trans_tools.backends import TranslationBackend, GoogleTranslateBackend,
 from pdf_trans_tools.cache import TranslationCache, get_cache
 from pdf_trans_tools.config import Config, load_config
 from pdf_trans_tools.validator import TranslationValidator, validate_translation, ValidationResult
+from pdf_trans_tools.pdf_reader import PdfReaderHelper
+from pdf_trans_tools.pdf_writer import PdfWriterHelper
 
 logger = logging.getLogger(__name__)
 
@@ -30,18 +34,6 @@ try:
     import requests
 except ImportError:
     requests = None
-
-try:
-    from PyPDF2 import PdfReader, PdfWriter
-except ImportError:
-    PdfReader = None
-    PdfWriter = None
-
-try:
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.pagesizes import letter
-except ImportError:
-    canvas = None
 
 # Valid language codes for Google Translate
 VALID_LANGUAGE_CODES = {
@@ -51,16 +43,37 @@ VALID_LANGUAGE_CODES = {
 
 
 class Translator:
-    """Translate PDF documents between languages."""
+    """Translate PDF documents between languages.
+
+    This is the main orchestrator class that coordinates:
+    - PDF reading (via PdfReaderHelper)
+    - PDF writing (via PdfWriterHelper)
+    - Translation (via backends)
+    - Caching
+    - Validation
+    """
 
     def __init__(self, api_key: Optional[str] = None, target_lang: str = "en", backend: Optional[TranslationBackend] = None, use_cache: bool = True):
+        """
+        Initialize Translator.
+
+        Args:
+            api_key: Google Translate API key
+            target_lang: Default target language code
+            backend: Optional custom translation backend
+            use_cache: Whether to use translation caching
+        """
         self.api_key = api_key
         self.target_lang = target_lang
         self._google_translate_url = "https://translation.googleapis.com/language/translate/v2"
         self._use_cache = use_cache
         self._cache = get_cache() if use_cache else None
 
-        # Setup backend manager
+        # PDF helpers
+        self._pdf_reader = PdfReaderHelper()
+        self._pdf_writer = PdfWriterHelper()
+
+        # Backend manager
         self._backend_manager = BackendManager()
         if backend:
             self._backend_manager.register("default", backend)
@@ -109,6 +122,58 @@ class Translator:
             return self._cache.stats()
         return {}
 
+    def extract_text(self, pdf_path: str, password: Optional[str] = None) -> str:
+        """
+        Extract text from a PDF file with page-by-page support.
+
+        Args:
+            pdf_path: Path to PDF file
+            password: Optional password for encrypted PDFs
+
+        Returns:
+            str: Extracted text content with page separators
+        """
+        return self._pdf_reader.extract_text(pdf_path, password)
+
+    def extract_text_by_page(self, pdf_path: str, password: Optional[str] = None) -> list[tuple[int, str]]:
+        """
+        Extract text from PDF page by page.
+
+        Args:
+            pdf_path: Path to PDF file
+            password: Optional password for encrypted PDFs
+
+        Returns:
+            list of tuples: [(page_num, text), ...]
+        """
+        return self._pdf_reader.extract_text_by_page(pdf_path, password)
+
+    def get_pdf_info(self, pdf_path: str) -> dict:
+        """
+        Get basic information about a PDF file.
+
+        Args:
+            pdf_path: Path to PDF file
+
+        Returns:
+            dict: PDF metadata including page count, encryption status, etc.
+        """
+        return self._pdf_reader.get_info(pdf_path)
+
+    def generate_translated_pdf(self, text_content: str, output_path: str, title: str = "Translated Document") -> bool:
+        """
+        Generate a PDF from translated text content.
+
+        Args:
+            text_content: The translated text to write to PDF
+            output_path: Path where the output PDF should be saved
+            title: Title for the document
+
+        Returns:
+            bool: True if PDF generation succeeded
+        """
+        return self._pdf_writer.generate_pdf(text_content, output_path, title)
+
     def translate_pdf(self, input_path: str, output_path: str, target_lang: Optional[str] = None) -> bool:
         """
         Translate a PDF file to the target language.
@@ -129,10 +194,7 @@ class Translator:
             return False
 
         # Translate the text
-        if self.api_key:
-            translated_text = self.google_translate(text, lang)
-        else:
-            translated_text = self._mock_translate(text, lang)
+        translated_text = self.translate(text, lang)
 
         # Generate output PDF
         self.generate_translated_pdf(translated_text, output_path, title=f"Translated to {lang}")
@@ -168,10 +230,7 @@ class Translator:
             )
 
         # Translate the text
-        if self.api_key:
-            translated_text = self.google_translate(original_text, lang)
-        else:
-            translated_text = self._mock_translate(original_text, lang)
+        translated_text = self.translate(original_text, lang)
 
         # Validate structure
         validation_result = validator.validate_structure(original_text, translated_text)
@@ -206,7 +265,7 @@ class Translator:
 
         Raises:
             ImportError: If requests library is not installed
-            ValueError: If API key is not set or translation fails
+            TranslationAPIError: If API key is not set or translation fails
         """
         if requests is None:
             raise ImportError("requests is required for Google Translate. Install with: pip install requests")
@@ -295,169 +354,6 @@ class Translator:
 
         return " ".join(translated_chunks)
 
-    def extract_text(self, pdf_path: str, password: Optional[str] = None) -> str:
-        """
-        Extract text from a PDF file with page-by-page support.
-
-        Args:
-            pdf_path: Path to PDF file
-            password: Optional password for encrypted PDFs
-
-        Returns:
-            str: Extracted text content with page separators
-
-        Raises:
-            ImportError: If PyPDF2 is not installed
-            FileNotFoundError: If the PDF file does not exist
-            ValueError: If the PDF is encrypted and no password is provided
-        """
-        if PdfReader is None:
-            raise ImportError("PyPDF2 is required for PDF text extraction. Install with: pip install PyPDF2")
-
-        try:
-            reader = PdfReader(pdf_path)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"PDF file not found: {pdf_path}")
-
-        if reader.is_encrypted:
-            if password is None:
-                raise ValueError(f"PDF is encrypted. Provide password parameter.")
-            try:
-                reader.decrypt(password)
-            except Exception:
-                raise ValueError(f"Failed to decrypt PDF with provided password.")
-
-        text_parts = []
-        for page_num, page in enumerate(reader.pages, start=1):
-            page_text = page.extract_text()
-            if page_text:
-                text_parts.append(f"--- Page {page_num} ---\n{page_text}")
-
-        return "\n\n".join(text_parts)
-
-    def extract_text_by_page(self, pdf_path: str, password: Optional[str] = None) -> list[tuple[int, str]]:
-        """
-        Extract text from PDF page by page.
-
-        Args:
-            pdf_path: Path to PDF file
-            password: Optional password for encrypted PDFs
-
-        Returns:
-            list of tuples: [(page_num, text), ...]
-
-        Raises:
-            ImportError: If PyPDF2 is not installed
-            FileNotFoundError: If the PDF file does not exist
-        """
-        if PdfReader is None:
-            raise ImportError("PyPDF2 is required for PDF text extraction. Install with: pip install PyPDF2")
-
-        try:
-            reader = PdfReader(pdf_path)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"PDF file not found: {pdf_path}")
-
-        if reader.is_encrypted:
-            if password is None:
-                raise ValueError(f"PDF is encrypted. Provide password parameter.")
-            try:
-                reader.decrypt(password)
-            except Exception:
-                raise ValueError(f"Failed to decrypt PDF with provided password.")
-
-        results = []
-        for page_num, page in enumerate(reader.pages, start=1):
-            page_text = page.extract_text() or ""
-            results.append((page_num, page_text))
-
-        return results
-
-    def get_pdf_info(self, pdf_path: str) -> dict:
-        """
-        Get basic information about a PDF file.
-
-        Args:
-            pdf_path: Path to PDF file
-
-        Returns:
-            dict: PDF metadata including page count, encryption status, etc.
-        """
-        if PdfReader is None:
-            raise ImportError("PyPDF2 is required for PDF operations. Install with: pip install PyPDF2")
-
-        try:
-            reader = PdfReader(pdf_path)
-        except FileNotFoundError:
-            raise FileNotFoundError(f"PDF file not found: {pdf_path}")
-
-        return {
-            "page_count": len(reader.pages),
-            "is_encrypted": reader.is_encrypted,
-            "metadata": reader.metadata if hasattr(reader, 'metadata') else {},
-        }
-
-    def generate_translated_pdf(self, text_content: str, output_path: str, title: str = "Translated Document") -> bool:
-        """
-        Generate a PDF from translated text content.
-
-        Args:
-            text_content: The translated text to write to PDF
-            output_path: Path where the output PDF should be saved
-            title: Title for the document
-
-        Returns:
-            bool: True if PDF generation succeeded
-
-        Raises:
-            ImportError: If reportlab is not installed
-        """
-        if canvas is None:
-            raise ImportError("reportlab is required for PDF generation. Install with: pip install reportlab")
-
-        c = canvas.Canvas(output_path, pagesize=letter)
-        width, height = letter
-
-        # Write title
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(50, height - 50, title)
-
-        # Write content
-        c.setFont("Helvetica", 10)
-        y_position = height - 80
-
-        lines = text_content.split('\n')
-        for line in lines:
-            # Wrap long lines
-            if len(line) > 80:
-                words = line.split()
-                current_line = ""
-                for word in words:
-                    if len(current_line) + len(word) + 1 <= 80:
-                        current_line += (" " + word if current_line else word)
-                    else:
-                        c.drawString(50, y_position, current_line)
-                        y_position -= 12
-                        current_line = word
-                        if y_position < 50:
-                            c.showPage()
-                            c.setFont("Helvetica", 10)
-                            y_position = height - 50
-                if current_line:
-                    c.drawString(50, y_position, current_line)
-                    y_position -= 12
-            else:
-                c.drawString(50, y_position, line)
-                y_position -= 12
-
-            if y_position < 50:
-                c.showPage()
-                c.setFont("Helvetica", 10)
-                y_position = height - 50
-
-        c.save()
-        return True
-
     def translate_and_generate_pdf(self, input_path: str, output_path: str, target_lang: str = None) -> bool:
         """
         Extract text from PDF, translate it, and generate a new PDF with translated content.
@@ -469,18 +365,15 @@ class Translator:
 
         Returns:
             bool: True if the process succeeded
-
-        Raises:
-            ValueError: If translation fails or input file cannot be read
         """
         lang = target_lang or self.target_lang
 
         # Extract text from input PDF
         text = self.extract_text(input_path)
         if not text:
-            raise ValueError(f"No text could be extracted from {input_path}")
+            raise PDFReadError(f"No text could be extracted from {input_path}")
 
-        # Translate the text (placeholder - uses mock translation)
+        # Translate the text
         translated_text = self._mock_translate(text, lang)
 
         # Generate output PDF
@@ -499,5 +392,4 @@ class Translator:
         Returns:
             str: Translated text (mock implementation)
         """
-        # This is a placeholder - real implementation would call translation API
         return f"[Translated to {target_lang}]: {text}"

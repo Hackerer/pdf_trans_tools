@@ -1,67 +1,41 @@
 [
   {
-    "id": "pdf-trans-v2-multi-lang",
-    "title": "Add support for multiple simultaneous translation backends",
+    "id": "pdf-trans-v3-arch-pdf-modules",
+    "title": "Refactor PDF operations into separate modules",
     "priority": "high",
     "status": "pending",
     "acceptance": [
-      "Support DeepL API as alternative backend",
-      "Backend selection via configuration",
-      "Fallback mechanism between backends",
-      "Unit tests for multi-backend support"
+      "PDFReader class extracted from Translator",
+      "PDFWriter class extracted from Translator",
+      "Translator class simplified to orchestration only",
+      "All existing tests pass after refactor"
     ],
-    "notes": "Enables users to choose preferred translation service"
+    "notes": "Architecture refactoring for better separation of concerns"
   },
   {
-    "id": "pdf-trans-v2-config-file",
-    "title": "Add configuration file support for persistent settings",
-    "priority": "medium",
-    "status": "pending",
-    "acceptance": [
-      "YAML/JSON configuration file support",
-      "Config file path via CLI or environment variable",
-      "API keys stored securely in config",
-      "Documentation for configuration options"
-    ],
-    "notes": "Improves usability and security"
-  },
-  {
-    "id": "pdf-trans-v2-progress-bar",
-    "title": "Add progress indicators for long-running operations",
-    "priority": "low",
-    "status": "pending",
-    "acceptance": [
-      "Progress bar for batch operations",
-      "Percentage completion display",
-      "ETA estimation for large files",
-      "Quiet mode for scripting"
-    ],
-    "notes": "Improves UX for large batch operations"
-  },
-  {
-    "id": "pdf-trans-v2-retry-logic",
+    "id": "pdf-trans-v3-retry-logic",
     "title": "Add automatic retry logic for transient failures",
     "priority": "medium",
     "status": "pending",
     "acceptance": [
-      "Exponential backoff for retries",
+      "Exponential backoff implementation",
       "Configurable retry count and timeout",
-      "Dead letter queue for failed translations",
-      "Retry status reporting"
+      "Retry status reporting",
+      "Unit tests for retry logic"
     ],
     "notes": "Improves reliability for production use"
   },
   {
-    "id": "pdf-trans-v2-caching",
-    "title": "Add translation caching to avoid redundant API calls",
+    "id": "pdf-trans-v3-batch-optimization",
+    "title": "Optimize batch translation with parallel processing",
     "priority": "medium",
     "status": "pending",
     "acceptance": [
-      "Cache translated segments by hash",
-      "Cache invalidation mechanism",
-      "Cache size limits and eviction",
-      "Stats for cache hit rate"
+      "Parallel file processing support",
+      "Worker pool configuration",
+      "Progress tracking for batch operations",
+      "Performance benchmarks"
     ],
-    "notes": "Reduces API costs and improves speed"
+    "notes": "Improves throughput for large batch operations"
   }
 ]
