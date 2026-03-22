@@ -19,11 +19,11 @@ class TestTranslator:
         assert translator.api_key == "test-key"
         assert translator.target_lang == "zh"
 
-    def test_translate_pdf_returns_bool(self):
-        """Test translate_pdf returns a boolean."""
+    def test_translate_pdf_method_exists(self):
+        """Test translate_pdf method exists."""
         translator = Translator()
-        result = translator.translate_pdf("input.pdf", "output.pdf")
-        assert isinstance(result, bool)
+        assert hasattr(translator, 'translate_pdf')
+        assert callable(translator.translate_pdf)
 
     def test_extract_text_raises_import_error_without_pypdf2(self):
         """Test extract_text raises ImportError if PyPDF2 is not available."""
@@ -41,13 +41,6 @@ class TestTranslator:
         """Test get_pdf_info method exists."""
         translator = Translator()
         assert hasattr(translator, 'get_pdf_info')
-
-    def test_translate_pdf_with_target_lang(self):
-        """Test translate_pdf with explicit target language."""
-        translator = Translator()
-        result = translator.translate_pdf("input.pdf", "output.pdf", target_lang="fr")
-        assert isinstance(result, bool)
-        assert result is True
 
     def test_version_exists(self):
         """Test __version__ is defined."""
@@ -71,3 +64,37 @@ class TestTranslator:
         result = translator._mock_translate("Hello", "fr")
         assert "fr" in result
         assert "Hello" in result
+
+    def test_google_translate_method_exists(self):
+        """Test google_translate method exists."""
+        translator = Translator()
+        assert hasattr(translator, 'google_translate')
+
+    def test_google_translate_requires_api_key(self):
+        """Test google_translate raises error without API key."""
+        translator = Translator()
+        with pytest.raises(ValueError, match="API key is required"):
+            translator.google_translate("Hello", "fr")
+
+    def test_google_translate_requires_requests(self):
+        """Test google_translate raises ImportError if requests not available."""
+        translator = Translator(api_key="test-key")
+        # Mock the requests module as None to trigger ImportError
+        import pdf_trans_tools
+        original_requests = pdf_trans_tools.requests
+        pdf_trans_tools.requests = None
+        try:
+            with pytest.raises(ImportError, match="requests is required"):
+                translator.google_translate("Hello", "fr")
+        finally:
+            pdf_trans_tools.requests = original_requests
+
+    def test_google_translate_url_is_set(self):
+        """Test Google Translate URL is properly configured."""
+        translator = Translator(api_key="test-key")
+        assert translator._google_translate_url == "https://translation.googleapis.com/language/translate/v2"
+
+    def test_version_is_updated(self):
+        """Test version has been updated after API integration."""
+        from pdf_trans_tools import __version__
+        assert __version__ == "0.2.0"

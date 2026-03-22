@@ -2,10 +2,16 @@
 pdf_trans_tools - PDF Translation Tools
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 import re
+import time
 from typing import Optional
+
+try:
+    import requests
+except ImportError:
+    requests = None
 
 try:
     from PyPDF2 import PdfReader, PdfWriter
@@ -26,6 +32,7 @@ class Translator:
     def __init__(self, api_key: Optional[str] = None, target_lang: str = "en"):
         self.api_key = api_key
         self.target_lang = target_lang
+        self._google_translate_url = "https://translation.googleapis.com/language/translate/v2"
 
     def translate_pdf(self, input_path: str, output_path: str, target_lang: Optional[str] = None) -> bool:
         """
@@ -40,11 +47,113 @@ class Translator:
             bool: True if translation succeeded
         """
         lang = target_lang or self.target_lang
-        if not self.api_key:
-            print(f"Translating {input_path} to {lang}, output to {output_path} (no API key)")
-            return True
-        print(f"Translating {input_path} to {lang}, output to {output_path}")
+
+        # Extract text from PDF
+        text = self.extract_text(input_path)
+        if not text:
+            return False
+
+        # Translate the text
+        if self.api_key:
+            translated_text = self.google_translate(text, lang)
+        else:
+            translated_text = self._mock_translate(text, lang)
+
+        # Generate output PDF
+        self.generate_translated_pdf(translated_text, output_path, title=f"Translated to {lang}")
         return True
+
+    def google_translate(self, text: str, target_lang: str, source_lang: str = "") -> str:
+        """
+        Translate text using Google Cloud Translation API.
+
+        Args:
+            text: Text to translate
+            target_lang: Target language code (e.g., 'en', 'zh', 'es')
+            source_lang: Source language code (auto-detect if empty)
+
+        Returns:
+            str: Translated text
+
+        Raises:
+            ImportError: If requests library is not installed
+            ValueError: If API key is not set or translation fails
+        """
+        if requests is None:
+            raise ImportError("requests is required for Google Translate. Install with: pip install requests")
+
+        if not self.api_key:
+            raise ValueError("API key is required for Google Translate. Set api_key in Translator constructor.")
+
+        # Google Translate API has a limit of 128KB per request
+        # Split text into chunks if necessary
+        max_chars = 5000  # Safe limit for API
+        if len(text) > max_chars:
+            return self._translate_large_text(text, target_lang, source_lang)
+
+        params = {
+            "key": self.api_key,
+            "q": text,
+            "target": target_lang,
+            "format": "text"
+        }
+        if source_lang:
+            params["source"] = source_lang
+
+        try:
+            response = requests.post(self._google_translate_url, params=params, timeout=30)
+            response.raise_for_status()
+            result = response.json()
+
+            if "data" in result and "translations" in result["data"]:
+                return result["data"]["translations"][0]["translatedText"]
+            else:
+                raise ValueError(f"Unexpected API response: {result}")
+        except requests.exceptions.RequestException as e:
+            raise ValueError(f"Google Translate API error: {e}")
+
+    def _translate_large_text(self, text: str, target_lang: str, source_lang: str = "") -> str:
+        """
+        Translate large text by splitting into chunks and translating each.
+
+        Args:
+            text: Text to translate
+            target_lang: Target language code
+            source_lang: Source language code
+
+        Returns:
+            str: Translated text
+        """
+        # Split by sentences or paragraphs for better context
+        chunks = []
+        current_chunk = []
+        current_length = 0
+        max_chars = 4000  # Leave room for API overhead
+
+        # Simple split by sentences
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+
+        for sentence in sentences:
+            if current_length + len(sentence) > max_chars and current_chunk:
+                chunks.append(" ".join(current_chunk))
+                current_chunk = []
+                current_length = 0
+            current_chunk.append(sentence)
+            current_length += len(sentence)
+
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+
+        # Translate each chunk with rate limiting
+        translated_chunks = []
+        for i, chunk in enumerate(chunks):
+            translated = self.google_translate(chunk, target_lang, source_lang)
+            translated_chunks.append(translated)
+            # Rate limiting to avoid API quotas
+            if i < len(chunks) - 1:
+                time.sleep(0.1)
+
+        return " ".join(translated_chunks)
 
     def extract_text(self, pdf_path: str, password: Optional[str] = None) -> str:
         """
