@@ -2,7 +2,7 @@
 pdf_trans_tools - PDF Translation Tools
 """
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 import logging
 import re
@@ -22,6 +22,7 @@ from pdf_trans_tools.exceptions import (
 from pdf_trans_tools.backends import TranslationBackend, GoogleTranslateBackend, MockBackend, BackendManager
 from pdf_trans_tools.cache import TranslationCache, get_cache
 from pdf_trans_tools.config import Config, load_config
+from pdf_trans_tools.validator import TranslationValidator, validate_translation, ValidationResult
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,60 @@ class Translator:
         # Generate output PDF
         self.generate_translated_pdf(translated_text, output_path, title=f"Translated to {lang}")
         return True
+
+    def translate_pdf_with_validation(self, input_path: str, output_path: str, target_lang: Optional[str] = None) -> tuple[bool, ValidationResult]:
+        """
+        Translate a PDF file with consistency validation.
+
+        Validates that the translated PDF maintains the same structure as the original.
+        If inconsistencies are found, automatic fixes are attempted.
+
+        Args:
+            input_path: Path to input PDF file
+            output_path: Path to output PDF file
+            target_lang: Target language code (e.g., 'en', 'zh', 'es')
+
+        Returns:
+            tuple of (success: bool, validation_result: ValidationResult)
+        """
+        lang = target_lang or self.target_lang
+        validator = TranslationValidator()
+
+        # Extract text from PDF
+        original_text = self.extract_text(input_path)
+        if not original_text:
+            return False, ValidationResult(
+                is_valid=False,
+                original_count=0,
+                translated_count=0,
+                differences=["Could not extract text from original PDF"],
+                message="Extraction failed"
+            )
+
+        # Translate the text
+        if self.api_key:
+            translated_text = self.google_translate(original_text, lang)
+        else:
+            translated_text = self._mock_translate(original_text, lang)
+
+        # Validate structure
+        validation_result = validator.validate_structure(original_text, translated_text)
+
+        # If validation fails, try to fix
+        if not validation_result.is_valid:
+            logger.warning(f"Translation validation issues found: {validation_result.differences}")
+            is_fixed, fixed_text = validator.validate_and_fix(original_text, translated_text)
+            if is_fixed:
+                translated_text = fixed_text
+                validation_result.is_valid = True
+                validation_result.message = "Validation passed after automatic fix"
+                logger.info("Automatic fix applied successfully")
+            else:
+                validation_result.differences.append("Automatic fix could not resolve all issues")
+
+        # Generate output PDF
+        self.generate_translated_pdf(translated_text, output_path, title=f"Translated to {lang}")
+        return True, validation_result
 
     def google_translate(self, text: str, target_lang: str, source_lang: str = "") -> str:
         """
