@@ -72,8 +72,9 @@ class TestTranslator:
 
     def test_google_translate_requires_api_key(self):
         """Test google_translate raises error without API key."""
+        from pdf_trans_tools.exceptions import TranslationAPIError
         translator = Translator()
-        with pytest.raises(ValueError, match="API key is required"):
+        with pytest.raises(TranslationAPIError, match="API key is required"):
             translator.google_translate("Hello", "fr")
 
     def test_google_translate_requires_requests(self):
@@ -95,6 +96,6 @@ class TestTranslator:
         assert translator._google_translate_url == "https://translation.googleapis.com/language/translate/v2"
 
     def test_version_is_updated(self):
-        """Test version has been updated after API integration."""
+        """Test version has been updated after error handling."""
         from pdf_trans_tools import __version__
-        assert __version__ == "0.3.0"
+        assert __version__ == "0.4.0"

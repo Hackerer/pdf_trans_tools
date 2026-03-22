@@ -2,11 +2,25 @@
 pdf_trans_tools - PDF Translation Tools
 """
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
+import logging
 import re
 import time
 from typing import Optional
+
+from pdf_trans_tools.exceptions import (
+    PDFTranslateError,
+    PDFReadError,
+    PDFWriteError,
+    PDFEncryptedError,
+    TranslationError,
+    TranslationAPIError,
+    TranslationRateLimitError,
+    InvalidLanguageError,
+)
+
+logger = logging.getLogger(__name__)
 
 try:
     import requests
@@ -24,6 +38,12 @@ try:
     from reportlab.lib.pagesizes import letter
 except ImportError:
     canvas = None
+
+# Valid language codes for Google Translate
+VALID_LANGUAGE_CODES = {
+    "en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh", "ar",
+    "hi", "bn", "pa", "ta", "te", "ml", "th", "vi", "id", "ms", "tl",
+}
 
 
 class Translator:
@@ -83,7 +103,11 @@ class Translator:
             raise ImportError("requests is required for Google Translate. Install with: pip install requests")
 
         if not self.api_key:
-            raise ValueError("API key is required for Google Translate. Set api_key in Translator constructor.")
+            raise TranslationAPIError("API key is required for Google Translate. Set api_key in Translator constructor.")
+
+        # Validate language code
+        if target_lang not in VALID_LANGUAGE_CODES:
+            raise InvalidLanguageError(f"Invalid language code: {target_lang}. Valid codes: {', '.join(sorted(VALID_LANGUAGE_CODES))}")
 
         # Google Translate API has a limit of 128KB per request
         # Split text into chunks if necessary
@@ -101,16 +125,23 @@ class Translator:
             params["source"] = source_lang
 
         try:
+            logger.debug(f"Calling Google Translate API for {len(text)} characters")
             response = requests.post(self._google_translate_url, params=params, timeout=30)
             response.raise_for_status()
             result = response.json()
 
             if "data" in result and "translations" in result["data"]:
-                return result["data"]["translations"][0]["translatedText"]
+                translated = result["data"]["translations"][0]["translatedText"]
+                logger.debug(f"Translation successful, {len(translated)} characters")
+                return translated
             else:
-                raise ValueError(f"Unexpected API response: {result}")
+                raise TranslationAPIError(f"Unexpected API response: {result}")
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 429:
+                raise TranslationRateLimitError(f"API rate limit exceeded: {e}")
+            raise TranslationAPIError(f"Google Translate API HTTP error: {e}")
         except requests.exceptions.RequestException as e:
-            raise ValueError(f"Google Translate API error: {e}")
+            raise TranslationAPIError(f"Google Translate API error: {e}")
 
     def _translate_large_text(self, text: str, target_lang: str, source_lang: str = "") -> str:
         """
