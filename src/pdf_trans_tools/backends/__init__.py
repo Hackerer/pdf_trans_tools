@@ -53,8 +53,22 @@ class MyMemoryBackend(TranslationBackend):
             "fi": "fi", "el": "el", "he": "he", "cs": "cs",
             "hu": "hu", "ro": "ro", "uk": "uk", "bg": "bg"
         }
-        self._max_retries = 3
-        self._retry_delay = 1  # seconds
+        self._max_retries = 2
+        self._retry_delay = 0.5  # seconds
+        self._session = None
+
+    def _get_session(self):
+        """Get or create requests session for connection pooling."""
+        import requests
+        if self._session is None:
+            self._session = requests.Session()
+            adapter = requests.adapters.HTTPAdapter(
+                pool_connections=10,
+                pool_maxsize=10,
+                max_retries=0
+            )
+            self._session.mount('https://', adapter)
+        return self._session
 
     def _convert_lang(self, code: str) -> str:
         """Convert language code to MyMemory format."""
@@ -62,7 +76,6 @@ class MyMemoryBackend(TranslationBackend):
 
     def translate(self, text: str, target_lang: str, source_lang: str = "") -> str:
         """Translate using MyMemory API (free, no API key needed)."""
-        import requests
         import time
 
         # MyMemory has a 500 char limit per request, so we split by sentences
@@ -72,7 +85,9 @@ class MyMemoryBackend(TranslationBackend):
         chunks = self._split_text(text)
 
         translated_parts = []
-        for i, chunk in enumerate(chunks):
+        session = self._get_session()
+
+        for chunk in chunks:
             params = {
                 "q": chunk,
                 "langpair": lang_pair
@@ -80,7 +95,7 @@ class MyMemoryBackend(TranslationBackend):
 
             for retry in range(self._max_retries):
                 try:
-                    response = requests.get(self._url, params=params, timeout=30)
+                    response = session.get(self._url, params=params, timeout=15)
                     response.raise_for_status()
                     result = response.json()
 
@@ -95,7 +110,7 @@ class MyMemoryBackend(TranslationBackend):
                         # Other error - fallback to original
                         translated_parts.append(chunk)
                         break
-                except requests.exceptions.RequestException:
+                except Exception:
                     if retry < self._max_retries - 1:
                         time.sleep(self._retry_delay * (retry + 1))
                         continue
