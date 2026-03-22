@@ -21,7 +21,7 @@ from pdf_trans_tools.exceptions import (
     TranslationRateLimitError,
     InvalidLanguageError,
 )
-from pdf_trans_tools.backends import TranslationBackend, GoogleTranslateBackend, MockBackend, BackendManager
+from pdf_trans_tools.backends import TranslationBackend, GoogleTranslateBackend, MockBackend, BackendManager, MyMemoryBackend
 from pdf_trans_tools.cache import TranslationCache, get_cache
 from pdf_trans_tools.config import Config, load_config
 from pdf_trans_tools.validator import TranslationValidator, validate_translation, ValidationResult
@@ -81,8 +81,11 @@ class Translator:
             self._backend_manager.register("default", backend)
         elif api_key:
             self._backend_manager.register("google", GoogleTranslateBackend(api_key))
+            self._backend_manager.register("default", GoogleTranslateBackend(api_key))
         else:
-            self._backend_manager.register("mock", MockBackend())
+            # Use MyMemory (free translation API) as default
+            self._backend_manager.register("mymemory", MyMemoryBackend())
+            self._backend_manager.register("default", MyMemoryBackend())
 
     def translate(self, text: str, target_lang: str = None, source_lang: str = "") -> str:
         """
