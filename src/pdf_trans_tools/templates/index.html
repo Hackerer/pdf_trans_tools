@@ -337,6 +337,48 @@
         .batch-result-item.error {
             border-color: #dc3545;
         }
+        .history-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .history-title {
+            font-weight: 600;
+            color: #333;
+        }
+        .history-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+        .history-item-name {
+            font-size: 13px;
+            color: #333;
+        }
+        .history-item-meta {
+            font-size: 12px;
+            color: #666;
+        }
+        .history-empty {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -443,6 +485,16 @@
                 <div class="validation-details" id="validationDetails"></div>
             </div>
 
+            <div class="history-section" id="historySection">
+                <div class="history-header">
+                    <span class="history-title">翻译历史</span>
+                    <button class="btn btn-secondary" id="clearHistoryBtn" style="padding: 6px 12px; font-size: 12px;">清空历史</button>
+                </div>
+                <div class="history-list" id="historyList">
+                    <div class="history-empty">暂无翻译历史</div>
+                </div>
+            </div>
+
             <div class="status-bar" id="statusBar">
                 准备就绪
             </div>
@@ -462,6 +514,42 @@
 
         let currentFile = null;
         let currentOutputPath = null;
+        let translationHistory = JSON.parse(localStorage.getItem('translationHistory') || '[]');
+
+        function renderHistory() {
+            const historyList = document.getElementById('historyList');
+            if (translationHistory.length === 0) {
+                historyList.innerHTML = '<div class="history-empty">暂无翻译历史</div>';
+                return;
+            }
+            historyList.innerHTML = translationHistory.slice(0, 10).map((item, idx) => `
+                <div class="history-item">
+                    <div>
+                        <div class="history-item-name">${item.name}</div>
+                        <div class="history-item-meta">${item.lang} · ${item.date}</div>
+                    </div>
+                    <a href="/api/download/${encodeURIComponent(item.filename)}" class="download-link" style="margin: 0;">下载</a>
+                </div>
+            `).join('');
+        }
+
+        function addToHistory(name, filename, lang) {
+            const now = new Date();
+            const date = now.toLocaleString('zh-CN', {month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
+            translationHistory.unshift({name, filename, lang, date});
+            translationHistory = translationHistory.slice(0, 20); // Keep max 20 items
+            localStorage.setItem('translationHistory', JSON.stringify(translationHistory));
+            renderHistory();
+        }
+
+        document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+            translationHistory = [];
+            localStorage.removeItem('translationHistory');
+            renderHistory();
+        });
+
+        // Initialize history on page load
+        renderHistory();
 
         // File upload handling
         uploadBox.addEventListener('click', () => fileInput.click());
@@ -544,8 +632,12 @@
                 if (data.success) {
                     currentOutputPath = data.output_filename;
                     translatedText.textContent = '翻译完成!';
+                    const targetLang = document.getElementById('targetLang').options[document.getElementById('targetLang').selectedIndex].text;
                     statusBar.innerHTML = '翻译成功! <a href="/api/download/' + encodeURIComponent(data.output_filename) + '" class="download-link">下载翻译文件</a>';
                     statusBar.className = 'status-bar success';
+
+                    // Add to history
+                    addToHistory(currentFile.name, data.output_filename, targetLang);
 
                     if (data.validation) {
                         showValidation(data.validation);
