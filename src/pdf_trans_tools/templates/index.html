@@ -118,28 +118,67 @@
             text-align: center;
             cursor: pointer;
             transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .upload-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+            transition: left 0.5s;
+        }
+        .upload-box:hover::before, .upload-box.dragover::before {
+            left: 100%;
         }
         .upload-box:hover {
             border-color: var(--bg-gradient-start);
             background: var(--hover-bg);
+            transform: scale(1.01);
         }
         .upload-box.dragover {
             border-color: var(--bg-gradient-start);
             background: var(--dragover-bg);
+            transform: scale(1.02);
+        }
+        .upload-box.has-file {
+            border-color: #28a745;
+            border-style: solid;
         }
         .upload-icon {
             font-size: 48px;
             margin-bottom: 16px;
+            transition: transform 0.3s;
+        }
+        .upload-box:hover .upload-icon {
+            transform: scale(1.1);
         }
         .upload-text {
             color: var(--text-secondary);
             font-size: 16px;
+            line-height: 1.6;
         }
         .upload-text strong {
             color: var(--bg-gradient-start);
         }
         .file-input {
             display: none;
+        }
+        .file-info {
+            margin-top: 12px;
+            padding: 8px 16px;
+            background: var(--success-bg);
+            border-radius: 20px;
+            display: inline-block;
+            font-size: 13px;
+            color: var(--success-color);
+        }
+        .file-info.error {
+            background: var(--error-bg);
+            color: var(--error-color);
         }
         .settings-panel {
             background: var(--settings-bg);
@@ -520,11 +559,12 @@
         <div class="content">
             <div class="upload-section">
                 <div class="upload-box" id="uploadBox">
-                    <div class="upload-icon">📄</div>
-                    <div class="upload-text">
-                        拖拽PDF文件到这里<br>
-                        或 <strong>点击选择文件</strong>
+                    <div class="upload-icon" id="uploadIcon">📄</div>
+                    <div class="upload-text" id="uploadText">
+                        <strong>点击选择PDF文件</strong> 或拖拽到此处<br>
+                        <span style="font-size: 13px; color: var(--text-muted);">支持 .pdf 文件，最大 50MB</span>
                     </div>
+                    <div class="file-info" id="fileInfo" style="display: none;"></div>
                     <input type="file" id="fileInput" class="file-input" accept=".pdf">
                 </div>
 
@@ -737,46 +777,83 @@
 
         function handleFile(file) {
             currentFile = file;
+
+            // Format file size
+            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            const sizeText = sizeMB < 1 ? `${(file.size / 1024).toFixed(1)} KB` : `${sizeMB} MB`;
+
+            // Show file info in upload box
+            const fileInfo = document.getElementById('fileInfo');
+            const uploadIcon = document.getElementById('uploadIcon');
+            const uploadText = document.getElementById('uploadText');
+            const uploadBox = document.getElementById('uploadBox');
+
+            uploadBox.classList.add('has-file');
+            uploadIcon.textContent = '📑';
+            uploadText.innerHTML = `<strong>${file.name}</strong><br><span style="color: var(--success-color);">${sizeText}</span>`;
+            fileInfo.style.display = 'inline-block';
+            fileInfo.textContent = `${sizeText}`;
+            fileInfo.className = 'file-info';
+
             translateBtn.disabled = false;
             extractBtn.disabled = false;
-            statusBar.textContent = `已选择: ${file.name}`;
-            statusBar.className = 'status-bar';
-            originalText.textContent = '正在提取文本...';
+            showStatus(`已选择文件: ${file.name} (${sizeText})`, 'info');
+            originalText.textContent = '正在提取文本内容，请稍候...';
             loading.style.display = 'block';
 
             // Extract text preview
             const formData = new FormData();
             formData.append('file', file);
 
-            console.log('Uploading file:', file.name, 'size:', file.size);
-
             fetch('/api/extract', {
                 method: 'POST',
                 body: formData
             })
-            .then(res => {
-                console.log('Response status:', res.status);
-                return res.json();
-            })
+            .then(res => res.json())
             .then(data => {
                 loading.style.display = 'none';
-                console.log('Extract response:', data);
                 if (data.success) {
-                    originalText.textContent = data.text.substring(0, 2000) + (data.text.length > 2000 ? '\n...(截断)' : '');
-                    statusBar.textContent = `提取成功，共 ${data.page_count} 页`;
+                    originalText.textContent = data.text.substring(0, 2000) + (data.text.length > 2000 ? '\n...(内容已截断)' : '');
+                    showStatus(`✓ 文本提取成功，共 ${data.page_count} 页，${data.text.length} 个字符`, 'success');
+
+                    // Update file info with page count
+                    fileInfo.textContent = `${sizeText} · ${data.page_count} 页`;
                 } else {
-                    originalText.textContent = '提取失败: ' + data.error;
-                    statusBar.textContent = '提取失败: ' + data.error;
-                    statusBar.className = 'status-bar error';
+                    originalText.textContent = '提取失败，请尝试其他PDF文件';
+                    showStatus('✗ ' + getFriendlyError(data.error), 'error');
+                    fileInfo.textContent = '提取失败';
+                    fileInfo.className = 'file-info error';
+                    uploadBox.classList.remove('has-file');
+                    uploadIcon.textContent = '📄';
                 }
             })
             .catch(err => {
                 loading.style.display = 'none';
-                console.error('Extract error:', err);
-                originalText.textContent = '错误: ' + err.message;
-                statusBar.textContent = '网络错误: ' + err.message;
-                statusBar.className = 'status-bar error';
+                originalText.textContent = '网络错误，请检查网络连接';
+                showStatus('✗ 网络错误: ' + err.message, 'error');
             });
+        }
+
+        function showStatus(message, type) {
+            statusBar.textContent = message;
+            statusBar.className = 'status-bar';
+            if (type === 'success') statusBar.classList.add('success');
+            if (type === 'error') statusBar.classList.add('error');
+            if (type === 'info') statusBar.style.background = 'var(--settings-bg)';
+        }
+
+        function getFriendlyError(error) {
+            const errorMap = {
+                'PDF marker not found': 'PDF文件格式无效或已损坏，请尝试其他文件',
+                'PDF无内容或文本提取失败': 'PDF内容为空或无法提取文本（可能是扫描件图片）',
+                'File must be a PDF': '请选择PDF格式的文件',
+                'No file uploaded': '请先选择要上传的文件',
+                'EOF marker not found': 'PDF文件不完整或已损坏'
+            };
+            for (const [key, value] of Object.entries(errorMap)) {
+                if (error.includes(key)) return value;
+            }
+            return error;
         }
 
         // Translate button
@@ -784,8 +861,8 @@
             if (!currentFile) return;
 
             loading.style.display = 'block';
-            statusBar.textContent = '翻译中...';
-            statusBar.className = 'status-bar';
+            const targetLang = document.getElementById('targetLang').options[document.getElementById('targetLang').selectedIndex].text;
+            showStatus(`正在翻译为${targetLang}，请稍候...`, 'info');
 
             const formData = new FormData();
             formData.append('file', currentFile);
@@ -803,9 +880,10 @@
 
                 if (data.success) {
                     currentOutputPath = data.output_filename;
-                    translatedText.textContent = '翻译完成!';
-                    const targetLang = document.getElementById('targetLang').options[document.getElementById('targetLang').selectedIndex].text;
-                    statusBar.innerHTML = '翻译成功! <a href="/api/download/' + encodeURIComponent(data.output_filename) + '" class="download-link">下载翻译文件</a>';
+                    translatedText.textContent = '✓ 翻译完成！文件已准备就绪。';
+
+                    const downloadLink = `/api/download/${encodeURIComponent(data.output_filename)}`;
+                    statusBar.innerHTML = `✓ 翻译成功！<a href="${downloadLink}" class="download-link" style="background: #28a745; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; margin-left: 12px;">📥 下载翻译文件</a>`;
                     statusBar.className = 'status-bar success';
 
                     // Add to history
@@ -814,17 +892,20 @@
                     if (data.validation) {
                         showValidation(data.validation);
                     }
+
+                    // Show success toast
+                    showToast('翻译完成！', 'success');
                 } else {
-                    translatedText.textContent = '翻译失败: ' + data.error;
-                    statusBar.textContent = '翻译失败: ' + data.error;
-                    statusBar.className = 'status-bar error';
+                    translatedText.textContent = '✗ 翻译失败';
+                    showStatus('✗ ' + getFriendlyError(data.error), 'error');
+                    showToast('翻译失败', 'error');
                 }
             })
             .catch(err => {
                 loading.style.display = 'none';
-                translatedText.textContent = '错误: ' + err.message;
-                statusBar.textContent = '错误: ' + err.message;
-                statusBar.className = 'status-bar error';
+                translatedText.textContent = '✗ 网络错误';
+                showStatus('✗ 网络错误: ' + err.message, 'error');
+                showToast('网络错误', 'error');
             });
         });
 
