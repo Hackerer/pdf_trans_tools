@@ -596,6 +596,58 @@
             color: var(--text-muted);
             font-size: 18px;
         }
+        .help-section {
+            background: linear-gradient(135deg, #667eea20, #764ba220);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .help-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .help-tips {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .help-tip {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .help-tip-icon {
+            flex-shrink: 0;
+        }
+        .error-help {
+            background: var(--warning-bg);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-top: 12px;
+            display: none;
+        }
+        .error-help.show {
+            display: block;
+        }
+        .error-help-title {
+            font-weight: 600;
+            color: var(--warning-color);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .error-help-content {
+            font-size: 13px;
+            color: var(--warning-color);
+        }
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -662,6 +714,37 @@
                 <div class="step" id="step3">
                     <div class="step-number">3</div>
                     <span>翻译完成</span>
+                </div>
+            </div>
+
+            <div class="help-section" id="helpSection">
+                <div class="help-header">
+                    💡 使用提示
+                </div>
+                <div class="help-tips">
+                    <div class="help-tip">
+                        <span class="help-tip-icon">📄</span>
+                        <span>支持PDF文件上传，最大50MB</span>
+                    </div>
+                    <div class="help-tip">
+                        <span class="help-tip-icon">🔤</span>
+                        <span>选择目标语言后点击翻译按钮</span>
+                    </div>
+                    <div class="help-tip">
+                        <span class="help-tip-icon">✅</span>
+                        <span>启用验证可检查翻译一致性</span>
+                    </div>
+                    <div class="help-tip">
+                        <span class="help-tip-icon">📥</span>
+                        <span>翻译完成后点击下载按钮</span>
+                    </div>
+                </div>
+                <div class="error-help" id="errorHelp">
+                    <div class="error-help-title">
+                        ⚠️ 遇到问题？
+                    </div>
+                    <div class="error-help-content" id="errorHelpContent">
+                    </div>
                 </div>
             </div>
 
