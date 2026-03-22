@@ -41,10 +41,17 @@ class MyMemoryBackend(TranslationBackend):
 
     def __init__(self):
         self._url = "https://api.mymemory.translated.net/get"
+        # Extended language code mapping for MyMemory API
         self._lang_codes = {
             "en": "en", "zh": "zh-CN", "ja": "ja", "ko": "ko",
             "fr": "fr", "de": "de", "es": "es", "it": "it",
-            "pt": "pt", "ru": "ru", "ar": "ar", "hi": "hi"
+            "pt": "pt-BR", "ru": "ru", "ar": "ar", "hi": "hi",
+            "bn": "bn", "pa": "pa", "ta": "ta", "te": "te",
+            "ml": "ml", "th": "th", "vi": "vi", "id": "id",
+            "ms": "ms", "tl": "tl", "tr": "tr", "nl": "nl",
+            "pl": "pl", "sv": "sv", "da": "da", "no": "no",
+            "fi": "fi", "el": "el", "he": "he", "cs": "cs",
+            "hu": "hu", "ro": "ro", "uk": "uk", "bg": "bg"
         }
         self._max_retries = 3
         self._retry_delay = 1  # seconds

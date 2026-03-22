@@ -37,10 +37,12 @@ try:
 except ImportError:
     requests = None
 
-# Valid language codes for Google Translate
+# Valid language codes for translation
 VALID_LANGUAGE_CODES = {
-    "en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh", "ar",
-    "hi", "bn", "pa", "ta", "te", "ml", "th", "vi", "id", "ms", "tl",
+    "en", "es", "fr", "de", "it", "pt", "pt-BR", "ru", "ja", "ko", "zh", "zh-CN",
+    "ar", "hi", "bn", "pa", "ta", "te", "ml", "th", "vi", "id", "ms", "tl",
+    "tr", "nl", "pl", "sv", "da", "no", "fi", "el", "he", "cs", "hu", "ro",
+    "uk", "bg", "th", "uk"
 }
 
 
