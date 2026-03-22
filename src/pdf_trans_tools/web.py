@@ -9,6 +9,10 @@ from flask import Flask, render_template, request, jsonify, send_file
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB max upload
 
+# Output directory for translated files
+OUTPUT_DIR = os.path.join(os.path.expanduser("~"), "pdf_trans_tools_output")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 # Import translator components
 from pdf_trans_tools import Translator
 
@@ -59,8 +63,10 @@ def translate():
             file.save(input_tmp.name)
             input_path = input_tmp.name
 
-        # Create output path
-        output_path = input_path.replace(".pdf", f"_translated_{target_lang}.pdf")
+        # Create output filename in OUTPUT_DIR
+        original_name = os.path.splitext(file.filename)[0]
+        output_filename = f"{original_name}_translated_{target_lang}.pdf"
+        output_path = os.path.join(OUTPUT_DIR, output_filename)
 
         # Translate with or without validation
         if validate:
@@ -69,7 +75,7 @@ def translate():
             )
             result = {
                 "success": success,
-                "output_path": output_path,
+                "output_filename": output_filename,
                 "validation": {
                     "is_valid": validation_result.is_valid,
                     "message": validation_result.message,
@@ -78,7 +84,7 @@ def translate():
             }
         else:
             success = translator.translate_pdf(input_path, output_path, target_lang)
-            result = {"success": success, "output_path": output_path}
+            result = {"success": success, "output_filename": output_filename}
 
         # Cleanup input file
         os.unlink(input_path)
@@ -140,7 +146,12 @@ def extract_text():
 @app.route("/api/download/<path:filename>")
 def download(filename):
     """Download a translated file."""
-    return send_file(filename, as_attachment=True)
+    from flask import abort
+    # Security: only allow files in OUTPUT_DIR
+    safe_path = os.path.join(OUTPUT_DIR, filename)
+    if not os.path.isfile(safe_path):
+        abort(404)
+    return send_file(safe_path, as_attachment=True)
 
 
 def run_server(host="127.0.0.1", port=5000, debug=True):

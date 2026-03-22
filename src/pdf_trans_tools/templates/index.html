@@ -236,6 +236,14 @@
             background: #f8d7da;
             color: #721c24;
         }
+        .download-link {
+            color: #155724;
+            text-decoration: underline;
+            margin-left: 12px;
+        }
+        .download-link:hover {
+            color: #0d4d0f;
+        }
         .loading {
             display: none;
             text-align: center;
@@ -453,6 +461,7 @@
         const statusBar = document.getElementById('statusBar');
 
         let currentFile = null;
+        let currentOutputPath = null;
 
         // File upload handling
         uploadBox.addEventListener('click', () => fileInput.click());
@@ -533,8 +542,9 @@
                 loading.style.display = 'none';
 
                 if (data.success) {
-                    translatedText.textContent = '翻译完成! 文件已保存.';
-                    statusBar.textContent = '翻译成功!';
+                    currentOutputPath = data.output_filename;
+                    translatedText.textContent = '翻译完成!';
+                    statusBar.innerHTML = '翻译成功! <a href="/api/download/' + encodeURIComponent(data.output_filename) + '" class="download-link">下载翻译文件</a>';
                     statusBar.className = 'status-bar success';
 
                     if (data.validation) {
