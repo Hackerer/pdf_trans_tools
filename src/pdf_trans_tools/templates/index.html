@@ -686,29 +686,35 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.7);
             display: none;
             align-items: center;
             justify-content: center;
             z-index: 2000;
+            backdrop-filter: blur(4px);
         }
         .loading-overlay.show {
             display: flex;
+            animation: fadeIn 0.3s ease;
         }
         .loading-modal {
             background: white;
-            padding: 40px;
-            border-radius: 16px;
+            padding: 48px;
+            border-radius: 20px;
             text-align: center;
-            max-width: 400px;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: scaleIn 0.3s ease;
         }
         .loading-modal h3 {
-            margin: 16px 0 8px;
+            margin: 20px 0 12px;
             color: #333;
+            font-size: 20px;
         }
         .loading-modal p {
             color: #666;
             font-size: 14px;
+            line-height: 1.5;
         }
         .loading-spinner {
             width: 60px;
@@ -719,6 +725,46 @@
             animation: spin 1s linear infinite;
             margin: 0 auto;
         }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes scaleIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                border-radius: 12px;
+            }
+            .content {
+                padding: 20px;
+            }
+            .upload-section {
+                grid-template-columns: 1fr;
+            }
+            .preview-section {
+                grid-template-columns: 1fr;
+            }
+            .step-indicator {
+                flex-wrap: wrap;
+                gap: 12px;
+            }
+        }
+        /* Animation for success */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .success-pulse {
+            animation: pulse 0.5s ease;
+        }
+        /* Smooth transitions */
+        .container, .upload-box, .btn, .preview-box {
+            transition: all 0.3s ease;
+        }
     </style>
 </head>
 <body>
@@ -726,7 +772,7 @@
         <div class="header">
             <h1>PDF翻译工具</h1>
             <div style="display: flex; align-items: center;">
-                <span class="version">v1.3.0</span>
+                <span class="version">v2.0.0</span>
                 <button class="theme-toggle" id="themeToggle" title="切换深色模式">🌙</button>
             </div>
         </div>
@@ -1155,10 +1201,12 @@
                 if (data.success) {
                     currentOutputPath = data.output_filename;
                     translatedText.textContent = '✓ 翻译完成！文件已准备就绪。';
+                    translatedText.classList.add('success-pulse');
+                    setTimeout(() => translatedText.classList.remove('success-pulse'), 500);
                     updateStepIndicator(3);
 
                     const downloadLink = `/api/download/${encodeURIComponent(data.output_filename)}`;
-                    statusBar.innerHTML = `✓ 翻译成功！<a href="${downloadLink}" class="download-link" style="background: #28a745; color: white; padding: 8px 16px; border-radius: 6px; text-decoration: none; margin-left: 12px;">📥 下载翻译文件</a>`;
+                    statusBar.innerHTML = `✓ 翻译成功！<a href="${downloadLink}" class="download-link" style="background: linear-gradient(135deg, #28a745, #20c997); color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; margin-left: 12px; display: inline-block;">📥 下载翻译文件</a>`;
                     statusBar.className = 'status-bar success';
 
                     // Add to history
@@ -1169,7 +1217,7 @@
                     }
 
                     // Show success toast
-                    showToast('翻译完成！', 'success');
+                    showToast('🎉 翻译完成！', 'success');
                 } else {
                     translatedText.textContent = '✗ 翻译失败';
                     showStatus('✗ ' + getFriendlyError(data.error), 'error');
