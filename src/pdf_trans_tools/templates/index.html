@@ -481,6 +481,38 @@
             color: var(--text-muted);
             padding: 20px;
         }
+        .history-item:hover {
+            background: var(--hover-bg);
+        }
+        .history-download-all {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        .batch-section {
+            background: var(--settings-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .batch-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .batch-title {
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
         .api-settings {
             background: var(--settings-bg);
             border-radius: 12px;
@@ -816,6 +848,13 @@
             </div>
 
             <div class="batch-section" id="batchSection" style="display: none;">
+                <div class="batch-header">
+                    <div class="batch-title">
+                        📚 批量翻译
+                        <span style="font-size: 12px; color: var(--text-muted); font-weight: normal;">一次处理多个文件</span>
+                    </div>
+                    <button class="btn btn-secondary" id="toggleBatchList" style="padding: 6px 12px; font-size: 12px;">收起</button>
+                </div>
                 <div class="upload-box" id="batchUploadBox" style="padding: 24px;">
                     <div class="upload-text">
                         拖拽多个PDF文件到此处<br>
@@ -826,12 +865,16 @@
                 <div class="file-list" id="fileList"></div>
                 <div class="batch-actions" id="batchActions" style="display: none; margin-top: 12px;">
                     <button class="btn btn-secondary" id="clearBatchBtn">清空列表</button>
+                    <button class="btn btn-primary" id="startBatchBtn" style="flex: 2;">开始批量翻译</button>
                 </div>
                 <div class="progress-section" id="progressSection" style="display: none;">
-                    <div class="progress-bar">
+                    <div class="progress-bar" style="height: 12px;">
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
-                    <div class="progress-text" id="progressText">0 / 0</div>
+                    <div class="progress-text" id="progressText">准备中...</div>
+                </div>
+                <div class="batch-summary" id="batchSummary" style="display: none; margin-top: 12px; padding: 12px; background: var(--success-bg); border-radius: 8px;">
+                    <span id="batchSuccessCount">0</span> 个成功，<span id="batchFailCount">0</span> 个失败
                 </div>
             </div>
 
@@ -1213,6 +1256,21 @@
             batchSection.style.display = batchSection.style.display === 'none' ? 'block' : 'none';
         });
 
+        document.getElementById('toggleBatchList').addEventListener('click', () => {
+            const batchUploadBox = document.getElementById('batchUploadBox');
+            const fileList = document.getElementById('fileList');
+            const isCollapsed = batchUploadBox.style.display === 'none';
+            if (isCollapsed) {
+                batchUploadBox.style.display = 'block';
+                fileList.style.display = 'block';
+                document.getElementById('toggleBatchList').textContent = '收起';
+            } else {
+                batchUploadBox.style.display = 'none';
+                fileList.style.display = 'none';
+                document.getElementById('toggleBatchList').textContent = '展开';
+            }
+        });
+
         batchUploadBox.addEventListener('click', () => batchFileInput.click());
 
         batchUploadBox.addEventListener('dragover', (e) => {
@@ -1236,52 +1294,79 @@
 
         function handleBatchFiles(files) {
             const pdfFiles = files.filter(f => f.name.endsWith('.pdf'));
-            if (pdfFiles.length === 0) return;
+            if (pdfFiles.length === 0) {
+                showToast('请选择PDF文件', 'error');
+                return;
+            }
 
             batchFiles = pdfFiles;
             renderFileList();
-            document.getElementById('batchActions').style.display = 'block';
+            document.getElementById('batchActions').style.display = 'flex';
             progressSection.style.display = 'block';
             updateProgress(0, batchFiles.length);
-
-            // Automatically start batch processing
-            processBatch();
         }
+
+        // Start batch button
+        document.getElementById('startBatchBtn').addEventListener('click', () => {
+            if (batchFiles.length > 0) {
+                processBatch();
+            }
+        });
 
         // Clear batch button
         document.getElementById('clearBatchBtn').addEventListener('click', () => {
             batchFiles = [];
-            fileList.innerHTML = '';
+            fileList.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">暂无文件</div>';
             document.getElementById('batchActions').style.display = 'none';
             progressSection.style.display = 'none';
+            document.getElementById('batchSummary').style.display = 'none';
             updateProgress(0, 0);
             batchFileInput.value = '';
         });
 
         function renderFileList() {
+            if (batchFiles.length === 0) {
+                fileList.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">暂无文件</div>';
+                return;
+            }
             fileList.innerHTML = batchFiles.map((file, idx) => `
                 <div class="file-item" data-idx="${idx}">
-                    <span class="file-name">${file.name}</span>
-                    <span class="file-status pending" id="status-${idx}">等待</span>
+                    <div>
+                        <span class="file-name">${file.name}</span>
+                        <span style="font-size: 11px; color: var(--text-muted); margin-left: 8px;">${(file.size / 1024).toFixed(1)} KB</span>
+                    </div>
+                    <span class="file-status pending" id="status-${idx}">待处理</span>
                 </div>
             `).join('');
         }
 
         function updateProgress(completed, total) {
-            const percent = total > 0 ? (completed / total * 100) : 0;
+            const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
             progressFill.style.width = percent + '%';
-            progressText.textContent = `${completed} / ${total}`;
+            if (completed === 0 && total === 0) {
+                progressText.textContent = '准备中...';
+            } else if (completed === total) {
+                progressText.textContent = `✓ 完成！${completed} / ${total}`;
+            } else {
+                progressText.textContent = `正在处理... ${completed} / ${total} (${percent}%)`;
+            }
         }
 
         async function processBatch() {
             if (batchFiles.length === 0) return;
 
+            let successCount = 0;
+            let failCount = 0;
+            const targetLang = document.getElementById('targetLang').options[document.getElementById('targetLang').selectedIndex].text;
+            showLoadingOverlay('正在批量翻译', `将翻译 ${batchFiles.length} 个文件为${targetLang}`);
+
             for (let i = 0; i < batchFiles.length; i++) {
                 const file = batchFiles[i];
                 const statusEl = document.getElementById(`status-${i}`);
 
-                statusEl.textContent = '处理中';
+                statusEl.textContent = '🔄 翻译中';
                 statusEl.className = 'file-status pending';
+                updateProgress(i + 1, batchFiles.length);
 
                 const formData = new FormData();
                 formData.append('file', file);
@@ -1296,21 +1381,33 @@
                     const data = await response.json();
 
                     if (data.success) {
-                        statusEl.textContent = '成功';
+                        statusEl.textContent = '✓ 成功';
                         statusEl.className = 'file-status success';
+                        successCount++;
                     } else {
-                        statusEl.textContent = '失败';
+                        statusEl.textContent = '✗ 失败';
                         statusEl.className = 'file-status error';
+                        failCount++;
                     }
                 } catch (err) {
-                    statusEl.textContent = '错误';
+                    statusEl.textContent = '✗ 错误';
                     statusEl.className = 'file-status error';
+                    failCount++;
                 }
-
-                updateProgress(i + 1, batchFiles.length);
             }
 
-            statusBar.textContent = `批量处理完成: ${batchFiles.length} 个文件`;
+            hideLoadingOverlay();
+            updateProgress(batchFiles.length, batchFiles.length);
+
+            // Show summary
+            const summary = document.getElementById('batchSummary');
+            document.getElementById('batchSuccessCount').textContent = successCount;
+            document.getElementById('batchFailCount').textContent = failCount;
+            summary.style.display = 'block';
+            summary.style.background = failCount > 0 ? 'var(--warning-bg)' : 'var(--success-bg)';
+
+            showToast(`批量处理完成：${successCount} 成功，${failCount} 失败`, failCount > 0 ? 'error' : 'success');
+            showStatus(`批量翻译完成：${successCount} 个成功，${failCount} 个失败`, failCount > 0 ? 'error' : 'success');
         }
 
         // API Key configuration
