@@ -287,13 +287,55 @@
             background: #f8d7da;
             color: #721c24;
         }
+        .batch-section {
+            margin-bottom: 24px;
+        }
+        .progress-section {
+            margin-top: 16px;
+        }
+        .progress-bar {
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .progress-text {
+            text-align: center;
+            margin-top: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+        .batch-result {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .batch-result-item {
+            background: white;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .batch-result-item.success {
+            border-color: #28a745;
+        }
+        .batch-result-item.error {
+            border-color: #dc3545;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>PDF翻译工具</h1>
-            <span class="version">v1.0.0</span>
+            <span class="version">v1.2.0</span>
         </div>
 
         <div class="content">
@@ -346,6 +388,27 @@
             <div class="action-buttons">
                 <button class="btn btn-primary" id="translateBtn" disabled>开始翻译</button>
                 <button class="btn btn-secondary" id="extractBtn" disabled>提取文本</button>
+                <button class="btn btn-secondary" id="batchBtn">批量处理</button>
+            </div>
+
+            <div class="batch-section" id="batchSection" style="display: none;">
+                <div class="upload-box" id="batchUploadBox" style="padding: 24px;">
+                    <div class="upload-text">
+                        拖拽多个PDF文件到此处<br>
+                        或 <strong>点击选择多个文件</strong>
+                    </div>
+                    <input type="file" id="batchFileInput" class="file-input" accept=".pdf" multiple>
+                </div>
+                <div class="file-list" id="fileList"></div>
+                <div class="batch-actions" id="batchActions" style="display: none; margin-top: 12px;">
+                    <button class="btn btn-secondary" id="clearBatchBtn">清空列表</button>
+                </div>
+                <div class="progress-section" id="progressSection" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">0 / 0</div>
+                </div>
             </div>
 
             <div class="loading" id="loading">
@@ -543,6 +606,124 @@
                 details.textContent = validation.differences ? validation.differences.join('\n') : validation.message;
             }
         }
+
+        // Batch processing
+        const batchBtn = document.getElementById('batchBtn');
+        const batchSection = document.getElementById('batchSection');
+        const batchUploadBox = document.getElementById('batchUploadBox');
+        const batchFileInput = document.getElementById('batchFileInput');
+        const fileList = document.getElementById('fileList');
+        const progressSection = document.getElementById('progressSection');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+
+        let batchFiles = [];
+
+        batchBtn.addEventListener('click', () => {
+            batchSection.style.display = batchSection.style.display === 'none' ? 'block' : 'none';
+        });
+
+        batchUploadBox.addEventListener('click', () => batchFileInput.click());
+
+        batchUploadBox.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            batchUploadBox.classList.add('dragover');
+        });
+
+        batchUploadBox.addEventListener('dragleave', () => {
+            batchUploadBox.classList.remove('dragover');
+        });
+
+        batchUploadBox.addEventListener('drop', (e) => {
+            e.preventDefault();
+            batchUploadBox.classList.remove('dragover');
+            handleBatchFiles(Array.from(e.dataTransfer.files));
+        });
+
+        batchFileInput.addEventListener('change', (e) => {
+            handleBatchFiles(Array.from(e.target.files));
+        });
+
+        function handleBatchFiles(files) {
+            const pdfFiles = files.filter(f => f.name.endsWith('.pdf'));
+            if (pdfFiles.length === 0) return;
+
+            batchFiles = pdfFiles;
+            renderFileList();
+            document.getElementById('batchActions').style.display = 'block';
+            progressSection.style.display = 'block';
+            updateProgress(0, batchFiles.length);
+
+            // Automatically start batch processing
+            processBatch();
+        }
+
+        // Clear batch button
+        document.getElementById('clearBatchBtn').addEventListener('click', () => {
+            batchFiles = [];
+            fileList.innerHTML = '';
+            document.getElementById('batchActions').style.display = 'none';
+            progressSection.style.display = 'none';
+            updateProgress(0, 0);
+            batchFileInput.value = '';
+        });
+
+        function renderFileList() {
+            fileList.innerHTML = batchFiles.map((file, idx) => `
+                <div class="file-item" data-idx="${idx}">
+                    <span class="file-name">${file.name}</span>
+                    <span class="file-status pending" id="status-${idx}">等待</span>
+                </div>
+            `).join('');
+        }
+
+        function updateProgress(completed, total) {
+            const percent = total > 0 ? (completed / total * 100) : 0;
+            progressFill.style.width = percent + '%';
+            progressText.textContent = `${completed} / ${total}`;
+        }
+
+        async function processBatch() {
+            if (batchFiles.length === 0) return;
+
+            for (let i = 0; i < batchFiles.length; i++) {
+                const file = batchFiles[i];
+                const statusEl = document.getElementById(`status-${i}`);
+
+                statusEl.textContent = '处理中';
+                statusEl.className = 'file-status pending';
+
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('target_lang', document.getElementById('targetLang').value);
+                formData.append('validate', document.getElementById('enableValidation').checked);
+
+                try {
+                    const response = await fetch('/api/translate', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        statusEl.textContent = '成功';
+                        statusEl.className = 'file-status success';
+                    } else {
+                        statusEl.textContent = '失败';
+                        statusEl.className = 'file-status error';
+                    }
+                } catch (err) {
+                    statusEl.textContent = '错误';
+                    statusEl.className = 'file-status error';
+                }
+
+                updateProgress(i + 1, batchFiles.length);
+            }
+
+            statusBar.textContent = `批量处理完成: ${batchFiles.length} 个文件`;
+        }
+
+        // Start batch processing when files are added
     </script>
 </body>
 </html>
