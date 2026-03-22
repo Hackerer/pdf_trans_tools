@@ -1116,15 +1116,22 @@
             formData.append('file', file);
 
             console.log('Uploading file to extract:', file.name);
+
+            // Create abort controller for timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
             fetch('/api/extract', {
                 method: 'POST',
-                body: formData
+                body: formData,
+                signal: controller.signal
             })
             .then(res => {
                 console.log('Extract response status:', res.status);
                 return res.json();
             })
             .then(data => {
+                clearTimeout(timeoutId);
                 console.log('Extract response:', data);
                 hideLoadingOverlay();
                 if (data.success) {
@@ -1145,6 +1152,7 @@
                 }
             })
             .catch(err => {
+                clearTimeout(timeoutId);
                 console.error('Extract error:', err);
                 hideLoadingOverlay();
                 originalText.textContent = '网络错误，请检查网络连接或刷新页面重试';
@@ -1162,15 +1170,23 @@
         }
 
         function getFriendlyError(error) {
-            const errorMap = {
-                'PDF marker not found': 'PDF文件格式无效或已损坏，请尝试其他文件',
-                'PDF无内容或文本提取失败': 'PDF内容为空或无法提取文本（可能是扫描件图片）',
-                'File must be a PDF': '请选择PDF格式的文件',
-                'No file uploaded': '请先选择要上传的文件',
-                'EOF marker not found': 'PDF文件不完整或已损坏'
-            };
-            for (const [key, value] of Object.entries(errorMap)) {
-                if (error.includes(key)) return value;
+            if (!error) return '未知错误';
+            const errorStr = String(error).toLowerCase();
+
+            if (errorStr.includes('pdf') || errorStr.includes('marker') || errorStr.includes('invalid')) {
+                return 'PDF文件格式无效或已损坏，请尝试其他文件';
+            }
+            if (errorStr.includes('encrypt') || errorStr.includes('密码')) {
+                return 'PDF文件已加密，请提供密码或尝试其他文件';
+            }
+            if (errorStr.includes('empty') || errorStr.includes('无内容') || errorStr.includes('扫描件')) {
+                return 'PDF内容为空或无法提取文本（可能是扫描件图片）';
+            }
+            if (errorStr.includes('network') || errorStr.includes('fetch')) {
+                return '网络错误，请检查网络连接后重试';
+            }
+            if (errorStr.includes('timeout')) {
+                return '请求超时，请重试';
             }
             return error;
         }
