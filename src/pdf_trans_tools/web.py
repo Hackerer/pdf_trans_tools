@@ -168,7 +168,18 @@ def extract_text():
 
     except Exception as e:
         logger.error(f"Extract error: {e}", exc_info=True)
-        return jsonify({"success": False, "error": str(e)})
+        error_msg = str(e)
+
+        # Provide more helpful error messages
+        if "PDF" in error_msg or "pdf" in error_msg.lower():
+            if "marker" in error_msg.lower() or "invalid" in error_msg.lower():
+                return jsonify({"success": False, "error": "PDF文件格式无效或已损坏"})
+            if "encrypted" in error_msg.lower():
+                return jsonify({"success": False, "error": "PDF文件已加密，请提供密码"})
+            if "password" in error_msg.lower():
+                return jsonify({"success": False, "error": "PDF文件已加密，需要密码"})
+
+        return jsonify({"success": False, "error": error_msg})
 
 
 @app.route("/api/download/<path:filename>")
