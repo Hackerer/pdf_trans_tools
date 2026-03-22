@@ -46,6 +46,8 @@ class MyMemoryBackend(TranslationBackend):
             "fr": "fr", "de": "de", "es": "es", "it": "it",
             "pt": "pt", "ru": "ru", "ar": "ar", "hi": "hi"
         }
+        self._max_retries = 3
+        self._retry_delay = 1  # seconds
 
     def _convert_lang(self, code: str) -> str:
         """Convert language code to MyMemory format."""
@@ -54,6 +56,7 @@ class MyMemoryBackend(TranslationBackend):
     def translate(self, text: str, target_lang: str, source_lang: str = "") -> str:
         """Translate using MyMemory API (free, no API key needed)."""
         import requests
+        import time
 
         # MyMemory has a 500 char limit per request, so we split by sentences
         lang_pair = f"{self._convert_lang(source_lang)}|{self._convert_lang(target_lang)}" if source_lang else f"en|{self._convert_lang(target_lang)}"
@@ -62,25 +65,35 @@ class MyMemoryBackend(TranslationBackend):
         chunks = self._split_text(text)
 
         translated_parts = []
-        for chunk in chunks:
+        for i, chunk in enumerate(chunks):
             params = {
                 "q": chunk,
                 "langpair": lang_pair
             }
 
-            try:
-                response = requests.get(self._url, params=params, timeout=30)
-                response.raise_for_status()
-                result = response.json()
+            for retry in range(self._max_retries):
+                try:
+                    response = requests.get(self._url, params=params, timeout=30)
+                    response.raise_for_status()
+                    result = response.json()
 
-                if result.get("responseStatus") == 200:
-                    translated_parts.append(result["responseData"]["translatedText"])
-                else:
-                    # Fallback: return original if API fails
+                    if result.get("responseStatus") == 200:
+                        translated_parts.append(result["responseData"]["translatedText"])
+                        break
+                    elif result.get("responseStatus") == 429:
+                        # Rate limited - wait and retry
+                        time.sleep(self._retry_delay * (retry + 1))
+                        continue
+                    else:
+                        # Other error - fallback to original
+                        translated_parts.append(chunk)
+                        break
+                except requests.exceptions.RequestException:
+                    if retry < self._max_retries - 1:
+                        time.sleep(self._retry_delay * (retry + 1))
+                        continue
+                    # Fallback: return original
                     translated_parts.append(chunk)
-            except Exception:
-                # Fallback: return original
-                translated_parts.append(chunk)
 
         return " ".join(translated_parts)
 

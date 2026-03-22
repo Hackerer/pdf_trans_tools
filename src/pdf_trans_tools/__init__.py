@@ -108,9 +108,13 @@ class Translator:
                 logger.debug(f"Cache hit for translation ({len(text)} chars)")
                 return cached
 
-        backend = self._backend_manager.get("default") or self._backend_manager.get("google")
+        backend = self._backend_manager.get("default") or self._backend_manager.get("mymemory") or self._backend_manager.get("google")
         if backend:
-            result = backend.translate(text, lang, source_lang)
+            try:
+                result = backend.translate(text, lang, source_lang)
+            except Exception as e:
+                logger.warning(f"Backend translation failed: {e}, falling back to mock")
+                result = self._mock_translate(text, lang)
         else:
             result = self._mock_translate(text, lang)
 
