@@ -8,9 +8,16 @@ import re
 from typing import Optional
 
 try:
-    from PyPDF2 import PdfReader
+    from PyPDF2 import PdfReader, PdfWriter
 except ImportError:
     PdfReader = None
+    PdfWriter = None
+
+try:
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import letter
+except ImportError:
+    canvas = None
 
 
 class Translator:
@@ -140,3 +147,108 @@ class Translator:
             "is_encrypted": reader.is_encrypted,
             "metadata": reader.metadata if hasattr(reader, 'metadata') else {},
         }
+
+    def generate_translated_pdf(self, text_content: str, output_path: str, title: str = "Translated Document") -> bool:
+        """
+        Generate a PDF from translated text content.
+
+        Args:
+            text_content: The translated text to write to PDF
+            output_path: Path where the output PDF should be saved
+            title: Title for the document
+
+        Returns:
+            bool: True if PDF generation succeeded
+
+        Raises:
+            ImportError: If reportlab is not installed
+        """
+        if canvas is None:
+            raise ImportError("reportlab is required for PDF generation. Install with: pip install reportlab")
+
+        c = canvas.Canvas(output_path, pagesize=letter)
+        width, height = letter
+
+        # Write title
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(50, height - 50, title)
+
+        # Write content
+        c.setFont("Helvetica", 10)
+        y_position = height - 80
+
+        lines = text_content.split('\n')
+        for line in lines:
+            # Wrap long lines
+            if len(line) > 80:
+                words = line.split()
+                current_line = ""
+                for word in words:
+                    if len(current_line) + len(word) + 1 <= 80:
+                        current_line += (" " + word if current_line else word)
+                    else:
+                        c.drawString(50, y_position, current_line)
+                        y_position -= 12
+                        current_line = word
+                        if y_position < 50:
+                            c.showPage()
+                            c.setFont("Helvetica", 10)
+                            y_position = height - 50
+                if current_line:
+                    c.drawString(50, y_position, current_line)
+                    y_position -= 12
+            else:
+                c.drawString(50, y_position, line)
+                y_position -= 12
+
+            if y_position < 50:
+                c.showPage()
+                c.setFont("Helvetica", 10)
+                y_position = height - 50
+
+        c.save()
+        return True
+
+    def translate_and_generate_pdf(self, input_path: str, output_path: str, target_lang: str = None) -> bool:
+        """
+        Extract text from PDF, translate it, and generate a new PDF with translated content.
+
+        Args:
+            input_path: Path to input PDF file
+            output_path: Path to output PDF file
+            target_lang: Target language code
+
+        Returns:
+            bool: True if the process succeeded
+
+        Raises:
+            ValueError: If translation fails or input file cannot be read
+        """
+        lang = target_lang or self.target_lang
+
+        # Extract text from input PDF
+        text = self.extract_text(input_path)
+        if not text:
+            raise ValueError(f"No text could be extracted from {input_path}")
+
+        # Translate the text (placeholder - uses mock translation)
+        translated_text = self._mock_translate(text, lang)
+
+        # Generate output PDF
+        self.generate_translated_pdf(translated_text, output_path, title=f"Translated to {lang}")
+        return True
+
+    def _mock_translate(self, text: str, target_lang: str) -> str:
+        """
+        Mock translation for testing purposes.
+        In production, this would call an actual translation API.
+
+        Args:
+            text: Text to translate
+            target_lang: Target language code
+
+        Returns:
+            str: Translated text (mock implementation)
+        """
+        # This is a placeholder - real implementation would call translation API
+        return f"[Translated to {target_lang}]: {text}"

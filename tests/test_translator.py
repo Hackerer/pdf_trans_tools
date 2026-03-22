@@ -54,3 +54,20 @@ class TestTranslator:
         from pdf_trans_tools import __version__
         assert __version__ is not None
         assert isinstance(__version__, str)
+
+    def test_generate_translated_pdf_method_exists(self):
+        """Test generate_translated_pdf method exists."""
+        translator = Translator()
+        assert hasattr(translator, 'generate_translated_pdf')
+
+    def test_translate_and_generate_pdf_method_exists(self):
+        """Test translate_and_generate_pdf method exists."""
+        translator = Translator()
+        assert hasattr(translator, 'translate_and_generate_pdf')
+
+    def test_mock_translate_returns_translated_text(self):
+        """Test _mock_translate wraps text with language marker."""
+        translator = Translator()
+        result = translator._mock_translate("Hello", "fr")
+        assert "fr" in result
+        assert "Hello" in result
