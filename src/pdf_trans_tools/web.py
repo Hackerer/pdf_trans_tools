@@ -2,8 +2,15 @@
 pdf_trans_tools web - Local web interface for PDF translation
 """
 import os
+import sys
 import tempfile
+import logging
 from pathlib import Path
+
+# 配置日志
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 from flask import Flask, render_template, request, jsonify, send_file
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -13,10 +20,15 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50MB max upload
 OUTPUT_DIR = os.path.join(os.path.expanduser("~"), "pdf_trans_tools_output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
+logger.info(f"OUTPUT_DIR: {OUTPUT_DIR}")
+logger.info(f"Template folder: {app.template_folder}")
+logger.info(f"Static folder: {app.static_folder}")
+
 # Import translator components
 from pdf_trans_tools import Translator
 
 translator = Translator()
+logger.info("Translator initialized successfully")
 
 
 @app.route("/")
@@ -59,17 +71,21 @@ def translate():
 
     try:
         # Save uploaded file temporarily
+        logger.info(f"Received file: {file.filename}, size: {request.content_length}")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as input_tmp:
             file.save(input_tmp.name)
             input_path = input_tmp.name
+        logger.info(f"Saved to temp file: {input_path}")
 
         # Create output filename in OUTPUT_DIR
         original_name = os.path.splitext(file.filename)[0]
         output_filename = f"{original_name}_translated_{target_lang}.pdf"
         output_path = os.path.join(OUTPUT_DIR, output_filename)
+        logger.info(f"Output path: {output_path}")
 
         # Translate with or without validation
         if validate:
+            logger.info("Starting translation with validation")
             success, validation_result = translator.translate_pdf_with_validation(
                 input_path, output_path, target_lang
             )
@@ -83,6 +99,7 @@ def translate():
                 }
             }
         else:
+            logger.info("Starting translation without validation")
             success = translator.translate_pdf(input_path, output_path, target_lang)
             if not success:
                 result = {"success": False, "error": "PDF无内容或文本提取失败", "output_filename": output_filename}
@@ -91,10 +108,12 @@ def translate():
 
         # Cleanup input file
         os.unlink(input_path)
+        logger.info(f"Translation complete: {result}")
 
         return jsonify(result)
 
     except Exception as e:
+        logger.error(f"Translation error: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)})
 
 
@@ -125,13 +144,16 @@ def extract_text():
 
     try:
         # Save uploaded file temporarily
+        logger.info(f"Extract: Received file: {file.filename}")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as input_tmp:
             file.save(input_tmp.name)
             input_path = input_tmp.name
+        logger.info(f"Extract: Saved to temp file: {input_path}")
 
         # Extract text and info
         text = translator.extract_text(input_path)
         info = translator.get_pdf_info(input_path)
+        logger.info(f"Extract: Got {len(text)} chars, {info.get('page_count', 0)} pages")
 
         # Cleanup
         os.unlink(input_path)
@@ -143,6 +165,7 @@ def extract_text():
         })
 
     except Exception as e:
+        logger.error(f"Extract error: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)})
 
 
