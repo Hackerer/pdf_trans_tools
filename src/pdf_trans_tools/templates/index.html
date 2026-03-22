@@ -442,6 +442,69 @@
             color: var(--text-muted);
             padding: 20px;
         }
+        .api-settings {
+            background: var(--settings-bg);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .api-settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .api-settings-title {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .api-status {
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+        .api-status.connected {
+            background: var(--success-bg);
+            color: var(--success-color);
+        }
+        .api-status.disconnected {
+            background: var(--error-bg);
+            color: var(--error-color);
+        }
+        .api-input-group {
+            display: flex;
+            gap: 8px;
+        }
+        .api-input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            font-size: 14px;
+            background: var(--input-bg);
+            color: var(--text-primary);
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+        .toast.success {
+            background: #28a745;
+        }
+        .toast.error {
+            background: #dc3545;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -498,6 +561,20 @@
                             启用一致性验证
                         </label>
                     </div>
+                </div>
+            </div>
+
+            <div class="api-settings" id="apiSettings">
+                <div class="api-settings-header">
+                    <span class="api-settings-title">API配置</span>
+                    <span class="api-status disconnected" id="apiStatus">未配置</span>
+                </div>
+                <div class="api-input-group">
+                    <input type="password" class="api-input" id="apiKeyInput" placeholder="输入Google Translate API Key (可选)">
+                    <button class="btn btn-secondary" id="saveApiKeyBtn" style="padding: 10px 16px;">保存</button>
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
+                    使用API Key可以获得更准确的翻译质量。不填则使用模拟翻译。
                 </div>
             </div>
 
@@ -903,6 +980,63 @@
             }
 
             statusBar.textContent = `批量处理完成: ${batchFiles.length} 个文件`;
+        }
+
+        // API Key configuration
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
+        const apiStatus = document.getElementById('apiStatus');
+
+        // Load API status on page load
+        fetch('/api/config')
+            .then(res => res.json())
+            .then(data => {
+                if (data.has_api_key) {
+                    apiStatus.textContent = '已配置';
+                    apiStatus.className = 'api-status connected';
+                }
+            });
+
+        saveApiKeyBtn.addEventListener('click', () => {
+            const apiKey = apiKeyInput.value.trim();
+            const formData = new FormData();
+            formData.append('api_key', apiKey);
+
+            fetch('/api/config', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    if (data.has_api_key) {
+                        apiStatus.textContent = '已配置';
+                        apiStatus.className = 'api-status connected';
+                        showToast('API Key已保存', 'success');
+                    } else {
+                        apiStatus.textContent = '未配置';
+                        apiStatus.className = 'api-status disconnected';
+                        showToast('已切换到模拟翻译模式', 'success');
+                    }
+                    apiKeyInput.value = '';
+                }
+            })
+            .catch(() => {
+                showToast('保存失败', 'error');
+            });
+        });
+
+        // Toast notification function
+        function showToast(message, type = 'success') {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => toast.remove(), 3000);
         }
 
         // Start batch processing when files are added

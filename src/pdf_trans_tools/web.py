@@ -154,6 +154,27 @@ def download(filename):
     return send_file(safe_path, as_attachment=True)
 
 
+@app.route("/api/config", methods=["GET", "POST"])
+def config():
+    """Get or set API configuration."""
+    global translator
+
+    if request.method == "POST":
+        api_key = request.form.get("api_key", "")
+        if api_key:
+            # Create new translator with API key
+            translator = Translator(api_key=api_key)
+            return jsonify({"success": True, "has_api_key": True})
+        else:
+            # Reset to default translator (mock mode)
+            translator = Translator()
+            return jsonify({"success": True, "has_api_key": False})
+
+    # GET - return current config status
+    has_key = bool(translator.api_key)
+    return jsonify({"has_api_key": has_key})
+
+
 def run_server(host="127.0.0.1", port=5000, debug=True):
     """Run the web server."""
     app.run(host=host, port=port, debug=debug)
